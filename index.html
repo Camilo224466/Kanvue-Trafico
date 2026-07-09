@@ -326,26 +326,50 @@ function App(){
     var eCa=CATEGORIAS.map(function(c){return {label:c,value:filtered.filter(function(d){return d.categoria===c;}).length};});
     var eCh=CHAMPIONS.map(function(c){return {label:c,value:filtered.filter(function(d){return d.champion===c;}).length};});
     function donut(data,title){
-      var total=data.reduce(function(s,d){return s+d.value;},0); if(!total)return null;
-      var cum=0,R=52,cx=70,cy=70,st=18,ci=2*Math.PI*R;
-      var sl=data.map(function(d){var pp=d.value/total,o=ci*(1-cum-pp);cum+=pp;return Object.assign({},d,{o:o,dash:ci*pp});});
+      var total=data.reduce(function(s,d){return s+d.value;},0);
+      if(!total) return null;
+      var cum=0, R=52, cx=70, cy=70, st=18, ci=2*Math.PI*R;
+      var sl=data.map(function(d){
+        var pp=d.value/total, o=ci*(1-cum-pp);
+        cum+=pp;
+        return {label:d.label,value:d.value,color:d.color,o:o,dash:ci*pp};
+      });
+      var sliceEls = sl.map(function(s,i){
+        return h('circle',{key:i,cx:cx,cy:cy,r:R,fill:'none',stroke:s.color,
+          strokeWidth:st,strokeDasharray:s.dash+' '+(ci-s.dash),strokeDashoffset:s.o,
+          style:{transform:'rotate(-90deg)',transformOrigin:cx+'px '+cy+'px'}});
+      });
+      var legendEls = sl.map(function(s,i){
+        return h('div',{key:i,style:{display:'flex',alignItems:'center',gap:8}},
+          h('div',{style:{width:10,height:10,borderRadius:2,background:s.color,flexShrink:0}}),
+          h('span',{style:{fontSize:11,color:'#555',flex:1}},s.label),
+          h('span',{style:{fontSize:12,fontWeight:700,color:s.color}},s.value));
+      });
       return h('div',{style:{background:'#fff',borderRadius:14,padding:'18px 20px',border:'1px solid #EBEBEB',boxShadow:'0 2px 8px rgba(0,0,0,.05)'}},
         h('div',{style:{fontSize:12,fontWeight:700,color:'#555',textTransform:'uppercase',marginBottom:12}},title),
         h('div',{style:{display:'flex',alignItems:'center',gap:20}},
           h('svg',{width:140,height:140,viewBox:'0 0 140 140'},
             h('circle',{cx:cx,cy:cy,r:R,fill:'none',stroke:'#F0F0F0',strokeWidth:st}),
-            sl.map(function(s,i){return h('circle',{key:i,cx:cx,cy:cy,r:R,fill:'none',stroke:s.color,strokeWidth:st,strokeDasharray:s.dash+' '+(ci-s.dash),strokeDashoffset:s.o,style:{transform:'rotate(-90deg)',transformOrigin:cx+'px '+cy+'px'}});}),
+            sliceEls,
             h('text',{x:cx,y:cy-4,textAnchor:'middle',fontSize:22,fontWeight:800,fill:KG},total),
             h('text',{x:cx,y:cy+14,textAnchor:'middle',fontSize:10,fill:'#999'},'total')),
           h('div',{style:{display:'flex',flexDirection:'column',gap:6,flex:1}},
-            sl.map(function(s,i){return h('div',{key:i,style:{display:'flex',alignItems:'center',gap:8}},h('div',{style:{width:10,height:10,borderRadius:2,background:s.color,flexShrink:0}}),h('span',{style:{fontSize:11,color:'#555',flex:1}},s.label),h('span',{style:{fontSize:12,fontWeight:700,color:s.color}},s.value));}))));
+            legendEls)));
     }
     function bar(data,title,accent){
       var mx=Math.max.apply(null,data.map(function(d){return d.value;}).concat([1]));
+      var items = data.map(function(d,i){
+        return h('div',{key:i},
+          h('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:3}},
+            h('span',{style:{fontSize:11,color:'#555'}},d.label),
+            h('span',{style:{fontSize:11,fontWeight:700,color:accent||KG}},d.value)),
+          h('div',{style:{height:7,background:'#F0F0F0',borderRadius:4,overflow:'hidden'}},
+            h('div',{style:{width:((d.value/mx)*100)+'%',height:'100%',
+              background:d.color||accent||KG,borderRadius:4,transition:'width 0.5s'}})));
+      });
       return h('div',{style:{background:'#fff',borderRadius:14,padding:'18px 20px',border:'1px solid #EBEBEB',boxShadow:'0 2px 8px rgba(0,0,0,.05)'}},
         h('div',{style:{fontSize:12,fontWeight:700,color:'#555',textTransform:'uppercase',marginBottom:14}},title),
-        h('div',{style:{display:'flex',flexDirection:'column',gap:10}},
-          data.map(function(d,i){return h('div',{key:i},h('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:3}},h('span',{style:{fontSize:11,color:'#555'}},d.label),h('span',{style:{fontSize:11,fontWeight:700,color:accent||KG}},d.value)),h('div',{style:{height:7,background:'#F0F0F0',borderRadius:4,overflow:'hidden'}},h('div',{style:{width:((d.value/mx)*100)+'%',height:'100%',background:d.color||accent||KG,borderRadius:4,transition:'width 0.5s'}})));}))));
+        h('div',{style:{display:'flex',flexDirection:'column',gap:10}},items));
     }
     return h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}},
       donut(eSt.filter(function(d){return d.value>0;}),'Estado de solicitudes'),
