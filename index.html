@@ -157,7 +157,7 @@ async function getDriveId(){
 async function getFileId(){
   if(_fileId)return _fileId;
   var driveId=await getDriveId();
-  var res=await gGet('/drives/'+driveId+'/root/search(q='+JSON.stringify('Kenvue')+')');
+  var res=await gGet('/drives/'+driveId+"/root/search(q='Kenvue')");
   var f=res.value.find(function(f){return f.name===FILE_NAME||f.name.toLowerCase().indexOf('trafico')!==-1||f.name.toLowerCase().indexOf('tráfico')!==-1;});
   if(!f)throw new Error('No se encontró el archivo "'+FILE_NAME+'" en SharePoint.');
   _fileId=f.id; return _fileId;
