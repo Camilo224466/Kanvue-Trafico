@@ -158,7 +158,7 @@ async function getFileId(){
   if(_fileId)return _fileId;
   var driveId=await getDriveId();
   var res=await gGet('/drives/'+driveId+"/root/search(q='Kenvue')");
-  var f=res.value.find(function(f){return f.name===FILE_NAME||f.name.toLowerCase().indexOf('trafico')!==-1||f.name.toLowerCase().indexOf('tráfico')!==-1;});
+  var f=res.value.find(function(f){return f.name===FILE_NAME||f.name.replace('.xlsb','.xlsx')===FILE_NAME||f.name.toLowerCase().indexOf('trafico')!==-1||f.name.toLowerCase().indexOf('tráfico')!==-1;});
   if(!f)throw new Error('No se encontró el archivo "'+FILE_NAME+'" en SharePoint.');
   _fileId=f.id; return _fileId;
 }
@@ -178,16 +178,20 @@ async function readSP(){
   return parseRows(XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:''}));
 }
 async function writeSP(data){
+  _driveId=null; _fileId=null;
   var driveId=await getDriveId(), fileId=await getFileId(), t=await getToken();
-  var r=await fetch('https://graph.microsoft.com/v1.0/drives/'+driveId+'/items/'+fileId+'/content',{headers:{Authorization:'Bearer '+t}});
-  var buf=await r.arrayBuffer(), wb=XLSX.read(buf,{type:'array'});
-  var sn=wb.SheetNames.find(function(n){return n.indexOf('Tráfico')!==-1||n.indexOf('General')!==-1;})||wb.SheetNames[0];
+  if(!t) throw new Error('No se pudo obtener token');
+  console.log('Guardando en SharePoint... driveId='+driveId+' fileId='+fileId);
+  var wb=XLSX.utils.book_new();
   var rows=data.map(function(d){return {'#':d.id,'Semana':d.semana,'Fecha Solicitud':d.fecha,'País':d.pais,'Categoría':d.categoria,'Solicitud / Entregable':d.solicitud,'Tipo':d.tipo,'Champion Interno':d.champion,'Prioridad':d.prioridad,'Esfuerzo (hrs)':d.esfuerzo,'Fecha Límite':d.fechaLimite,'Estado':d.estado,'% Avance':d.avance,'Comentarios':d.comentarios};});
-  var ws=XLSX.utils.json_to_sheet(rows); ws['!cols']=[5,10,16,12,20,50,14,16,12,14,14,14,12,35].map(function(w){return {wch:w};});
-  wb.Sheets[sn]=ws;
-  var out=XLSX.write(wb,{bookType:'xlsb',type:'array'}), blob=new Blob([out],{type:'application/vnd.ms-excel.sheet.binary.macroEnabled.12'});
+  var ws=XLSX.utils.json_to_sheet(rows);
+  ws['!cols']=[4,8,14,10,18,45,12,18,10,10,12,12,10,30].map(function(w){return {wch:w};});
+  XLSX.utils.book_append_sheet(wb,ws,'Tráfico General');
+  var out=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+  var blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   var up=await fetch('https://graph.microsoft.com/v1.0/drives/'+driveId+'/items/'+fileId+'/content',{method:'PUT',headers:{Authorization:'Bearer '+t,'Content-Type':'application/octet-stream'},body:blob});
-  if(!up.ok)throw new Error('Error guardando: '+up.status);
+  if(!up.ok)throw new Error('Error guardando en SharePoint: '+up.status+' '+await up.text());
+  console.log('✅ Guardado exitosamente');
 }
 
 // ── React helpers (no JSX, no Babel) ─────────────────────────────────────────
