@@ -157,21 +157,34 @@ async function getDriveId(){
 async function getFileId(){
   if(_fileId)return _fileId;
   var driveId=await getDriveId();
-  // First try direct folder path: Documentos/General/Herramientas
-  try{
-    var folder=await gGet("/drives/"+driveId+"/root:/Shared%20Documents/General/Herramientas:/children");
-    if(folder&&folder.value){
-      var f=folder.value.find(function(f){return f.name===FILE_NAME||f.name.toLowerCase().indexOf("trafico")!==-1||f.name.toLowerCase().indexOf("tráfico")!==-1;});
-      if(f){console.log("Found file in folder: "+f.name);_fileId=f.id;return _fileId;}
-    }
-  }catch(e){console.log("Folder search failed, trying global search: "+e.message);}
-  // Fallback: search entire drive
-  var res=await gGet("/drives/"+driveId+"/root/search(q='Kenvue')");
-  if(!res||!res.value)throw new Error("No se pudo buscar el archivo en SharePoint.");
-  var f2=res.value.find(function(f){return f.name===FILE_NAME||f.name.replace(".xlsb",".xlsx")===FILE_NAME||f.name.toLowerCase().indexOf("trafico")!==-1||f.name.toLowerCase().indexOf("tráfico")!==-1;});
-  if(!f2)throw new Error("No se encontró '"+FILE_NAME+"' en SharePoint. Ruta esperada: Documentos/General/Herramientas/"+FILE_NAME);
-  console.log("Found file via search: "+f2.name);
-  _fileId=f2.id;return _fileId;
+  // Try multiple known folder paths
+  var paths=[
+    "/root:/Shared%20Documents/General/Herramientas:/children",
+    "/root:/Shared%20Documents/Herramientas:/children",
+    "/root:/General/Herramientas:/children",
+    "/root:/Herramientas:/children",
+    "/root:/Documentos/General/Herramientas:/children",
+    "/root:/Documentos%20compartidos/General/Herramientas:/children"
+  ];
+  for(var i=0;i<paths.length;i++){
+    try{
+      var folder=await gGet("/drives/"+driveId+paths[i]);
+      if(folder&&folder.value){
+        var f=folder.value.find(function(f){return f.name===FILE_NAME;});
+        if(f){console.log("Found in path "+paths[i]+": "+f.name);_fileId=f.id;return _fileId;}
+      }
+    }catch(e){console.log("Path failed: "+paths[i]);}
+  }
+  // Fallback: search entire drive and match EXACT filename
+  console.log("Trying global search for exact filename: "+FILE_NAME);
+  var res=await gGet("/drives/"+driveId+"/root/search(q='Base+Trafico')");
+  if(res&&res.value){
+    var f2=res.value.find(function(f){return f.name===FILE_NAME;});
+    if(f2){console.log("Found via search: "+f2.name+" at "+f2.parentReference.path);_fileId=f2.id;return _fileId;}
+    // Log all found files to help debug
+    console.log("Files found in search: "+res.value.map(function(f){return f.name+" ("+f.parentReference.path+")";}).join(", "));
+  }
+  throw new Error("No se encontró '"+FILE_NAME+"' en SharePoint.");
 }
 function parseRows(rows){
   return rows.map(function(r,i){
