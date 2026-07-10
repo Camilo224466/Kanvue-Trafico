@@ -159,7 +159,7 @@ async function getFileId(){
   var driveId=await getDriveId();
   // First try direct folder path: Documentos/General/Herramientas
   try{
-    var folder=await gGet("/drives/"+driveId+"/root:/Documentos/General/Herramientas:/children");
+    var folder=await gGet("/drives/"+driveId+"/root:/Shared%20Documents/General/Herramientas:/children");
     if(folder&&folder.value){
       var f=folder.value.find(function(f){return f.name===FILE_NAME||f.name.toLowerCase().indexOf("trafico")!==-1||f.name.toLowerCase().indexOf("tráfico")!==-1;});
       if(f){console.log("Found file in folder: "+f.name);_fileId=f.id;return _fileId;}
