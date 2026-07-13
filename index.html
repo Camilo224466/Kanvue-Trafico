@@ -252,6 +252,32 @@ function KCard(p){
 
 function Sel(p){return h('select',{value:p.value,onChange:function(e){p.onChange(e.target.value);},style:INP},p.opts.map(function(o){return h('option',{key:o},o);}));}
 
+  // Champion multi-select picker component
+  function ChampionPicker(p){
+    var [open,setOpen]=useState(false);
+    var selected=p.value?p.value.split(' / ').filter(function(s){return s.trim()!=='';}).map(function(s){return s.trim();}) : [];
+    function toggle(champ){
+      var idx=selected.indexOf(champ);
+      var next=idx===-1?selected.concat([champ]):selected.filter(function(s){return s!==champ;});
+      p.onChange(next.join(' / '));
+    }
+    return h('div',{style:{position:'relative'}},
+      h('div',{onClick:function(){setOpen(!open);},style:{width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid '+(open?KG:'#DDD'),fontSize:12,background:'#FAFAFA',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between',minHeight:36}},
+        h('div',{style:{flex:1,display:'flex',gap:4,flexWrap:'wrap'}},
+          selected.length===0
+            ? h('span',{style:{color:'#AAA'}},'Seleccionar champions...')
+            : selected.map(function(s){return h('span',{key:s,style:{background:KG,color:'#fff',borderRadius:12,padding:'1px 8px',fontSize:10,fontWeight:600}},s.split(' ')[0]);})),
+        h('span',{style:{color:'#AAA',fontSize:10}},open?'▲':'▼')),
+      open&&h('div',{style:{position:'absolute',top:'100%',left:0,right:0,background:'#fff',border:'1px solid #E0E0E0',borderRadius:8,boxShadow:'0 4px 16px rgba(0,0,0,.12)',zIndex:100,maxHeight:200,overflowY:'auto',marginTop:2}},
+        CHAMPIONS.map(function(c){
+          var checked=selected.indexOf(c)!==-1;
+          return h('div',{key:c,onClick:function(){toggle(c);},style:{padding:'8px 12px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,background:checked?'#EBF5EE':'#fff',borderBottom:'1px solid #F5F5F5'}},
+            h('div',{style:{width:16,height:16,borderRadius:3,border:'2px solid '+(checked?KG:'#CCC'),background:checked?KG:'#fff',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}},
+              checked&&h('span',{style:{color:'#fff',fontSize:10,fontWeight:700}},'✓')),
+            h('span',{style:{fontSize:12,color:'#333'}},c));
+        })));
+  }
+
 function EditModal(p){
   var [form,setForm]=useState(Object.assign({},p.item));
   function set(k,v){setForm(function(f){return Object.assign({},f,{[k]:v});});}
@@ -350,32 +376,6 @@ function App(){
 
   function sb(v){return {padding:'7px 16px',borderRadius:8,border:'none',cursor:'pointer',fontSize:12,fontWeight:700,background:view===v?KG:'#F0F0F0',color:view===v?'#fff':'#555'};}
   // Multi-select chips for semana filter
-  // Champion multi-select picker component
-  function ChampionPicker(p){
-    var [open,setOpen]=useState(false);
-    var selected=p.value?p.value.split(' / ').filter(function(s){return s.trim()!=='';}).map(function(s){return s.trim();}) : [];
-    function toggle(champ){
-      var idx=selected.indexOf(champ);
-      var next=idx===-1?selected.concat([champ]):selected.filter(function(s){return s!==champ;});
-      p.onChange(next.join(' / '));
-    }
-    return h('div',{style:{position:'relative'}},
-      h('div',{onClick:function(){setOpen(!open);},style:{width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid '+(open?KG:'#DDD'),fontSize:12,background:'#FAFAFA',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between',minHeight:36}},
-        h('div',{style:{flex:1,display:'flex',gap:4,flexWrap:'wrap'}},
-          selected.length===0
-            ? h('span',{style:{color:'#AAA'}},'Seleccionar champions...')
-            : selected.map(function(s){return h('span',{key:s,style:{background:KG,color:'#fff',borderRadius:12,padding:'1px 8px',fontSize:10,fontWeight:600}},s.split(' ')[0]);})),
-        h('span',{style:{color:'#AAA',fontSize:10}},open?'▲':'▼')),
-      open&&h('div',{style:{position:'absolute',top:'100%',left:0,right:0,background:'#fff',border:'1px solid #E0E0E0',borderRadius:8,boxShadow:'0 4px 16px rgba(0,0,0,.12)',zIndex:100,maxHeight:200,overflowY:'auto',marginTop:2}},
-        CHAMPIONS.map(function(c){
-          var checked=selected.indexOf(c)!==-1;
-          return h('div',{key:c,onClick:function(){toggle(c);},style:{padding:'8px 12px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,background:checked?'#EBF5EE':'#fff',borderBottom:'1px solid #F5F5F5'}},
-            h('div',{style:{width:16,height:16,borderRadius:3,border:'2px solid '+(checked?KG:'#CCC'),background:checked?KG:'#fff',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}},
-              checked&&h('span',{style:{color:'#fff',fontSize:10,fontWeight:700}},'✓')),
-            h('span',{style:{fontSize:12,color:'#333'}},c));
-        })));
-  }
-
   function multiChips(selected,setSelected,opts){
     return h('div',{style:{display:'flex',gap:4,flexWrap:'wrap',maxWidth:600}},
       opts.map(function(o){
