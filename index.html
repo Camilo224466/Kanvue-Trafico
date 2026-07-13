@@ -540,14 +540,21 @@ function App(){
       var total2=data.reduce(function(s,d){return s+d.value;},0);
       if(!total2)return null;
       var cum=0,R=54,cx=70,cy=70,st=20,ci=2*Math.PI*R;
+      // Normalize values so they always sum to exactly 100%
       var slices=data.map(function(d){
         var pct=d.value/total2,o=ci*(1-cum-pct);
         cum+=pct;
-        return{label:d.label,value:d.value,color:d.color,o:o,dash:ci*pct,gap:ci*(1-pct)};
+        return{label:d.label,value:d.value,color:d.color,o:o,dash:ci*pct};
       });
-      // Total arc covered — if 100% covered no grey shows
-      var totalDash=slices.reduce(function(s,sl){return s+sl.dash;},0);
-      var showBg=totalDash<ci*0.99; // only show grey if not fully covered
+      // Fix floating point: adjust last slice to fill exactly to end
+      if(slices.length>0){
+        var usedDash=slices.reduce(function(s,sl){return s+sl.dash;},0);
+        var diff=ci-usedDash;
+        if(Math.abs(diff)>0.001){
+          slices[slices.length-1].dash+=diff;
+        }
+      }
+      var showBg=false; // never show grey — slices always fill 100%
       return h('div',{style:{background:'#fff',borderRadius:14,padding:'24px',border:'1px solid #E8E8E8',boxShadow:'0 2px 12px rgba(0,0,0,.06)'}},
         h('div',{style:{fontSize:11,fontWeight:700,color:'#888',textTransform:'uppercase',letterSpacing:'0.6px',marginBottom:16}},p.title),
         h('div',{style:{display:'flex',alignItems:'center',gap:20}},
