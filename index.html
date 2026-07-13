@@ -309,6 +309,7 @@ function App(){
   var [fp,setFp]=useState('Todos');
   var [fc,setFc]=useState('Todos');
   var [fpr,setFpr]=useState('Todos');
+  var [fsem,setFsem]=useState([]);
   var [search,setSearch]=useState('');
   var [sel,setSel]=useState(null);
   var [showNew,setShowNew]=useState(false);
@@ -339,7 +340,7 @@ function App(){
   async function addItem(item){var nd=data.concat([item]);setData(nd);await save(nd);}
   async function reload(){setStatus('loading');try{var rows=await readSP();setData(rows);setStatus('ready');showToast('✅ '+rows.length+' actualizadas');}catch(e){showToast('❌ '+e.message,'err');setStatus('ready');}}
 
-  var filtered=useMemo(function(){return data.filter(function(d){return (fp==='Todos'||d.pais===fp)&&(fc==='Todos'||d.champion===fc)&&(fpr==='Todos'||d.prioridad===fpr)&&(search===''||d.solicitud.toLowerCase().indexOf(search.toLowerCase())!==-1||d.categoria.toLowerCase().indexOf(search.toLowerCase())!==-1);});}, [data,fp,fc,fpr,search]);
+  var filtered=useMemo(function(){return data.filter(function(d){return (fp==='Todos'||d.pais===fp)&&(fc==='Todos'||d.champion===fc)&&(fpr==='Todos'||d.prioridad===fpr)&&(fsem.length===0||fsem.indexOf(d.semana)!==-1)&&(search===''||d.solicitud.toLowerCase().indexOf(search.toLowerCase())!==-1||d.categoria.toLowerCase().indexOf(search.toLowerCase())!==-1);});}, [data,fp,fc,fpr,search]);
 
   var nextId=data.length?Math.max.apply(null,data.map(function(d){return d.id;}))+1:1;
   var totalHrs=filtered.reduce(function(s,d){return s+d.esfuerzo;},0);
@@ -347,6 +348,20 @@ function App(){
   var altas=filtered.filter(function(d){return d.prioridad==='Alta';}).length;
 
   function sb(v){return {padding:'7px 16px',borderRadius:8,border:'none',cursor:'pointer',fontSize:12,fontWeight:700,background:view===v?KG:'#F0F0F0',color:view===v?'#fff':'#555'};}
+  // Multi-select chips for semana filter
+  function multiChips(selected,setSelected,opts){
+    return h('div',{style:{display:'flex',gap:4,flexWrap:'wrap',maxWidth:600}},
+      opts.map(function(o){
+        var active=selected.indexOf(o)!==-1;
+        return h('button',{key:o,onClick:function(){
+          if(active){setSelected(selected.filter(function(s){return s!==o;}));}
+          else{setSelected(selected.concat([o]));}
+        },style:{padding:'4px 10px',borderRadius:20,border:'1px solid',
+          borderColor:active?KG:'#DDD',background:active?KG:'#fff',
+          color:active?'#fff':'#555',fontSize:10,fontWeight:600,cursor:'pointer',
+          transition:'all 0.15s'}},o);
+      }));
+  }
   function chips(cur,setCur,opts){
     return h('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
       ['Todos'].concat(opts).map(function(o){
@@ -489,6 +504,13 @@ function App(){
               [['Solicitudes',items.length],['Completadas',done],['Horas',hrs+'h']].map(function(x){return h('div',{key:x[0],style:{textAlign:'center'}},h('div',{style:{fontSize:20,fontWeight:800,color:meta.accent}},x[1]),h('div',{style:{fontSize:10,color:'#777'}},x[0]));}))); })));
   }
 
+  var semanasDisponibles=data.reduce(function(acc,d){
+    if(d.semana&&acc.indexOf(d.semana)===-1)acc.push(d.semana);
+    return acc;
+  },[]).sort(function(a,b){
+    var na=parseInt(a.replace(/[^0-9]/g,''))||0, nb=parseInt(b.replace(/[^0-9]/g,''))||0;
+    return na-nb;
+  });
   return h('div',{style:{minHeight:'100vh',background:'#F0F4F1'}},
     // Header
     h('div',{style:{background:KG,padding:'0 24px',display:'flex',alignItems:'center',justifyContent:'space-between',height:58,flexWrap:'wrap',gap:8}},
@@ -508,11 +530,18 @@ function App(){
         h('button',{onClick:reload,style:{padding:'7px 14px',borderRadius:8,background:'rgba(255,255,255,.1)',color:'#fff',border:'1px solid rgba(255,255,255,.25)',cursor:'pointer',fontSize:12,fontWeight:600}},'🔄 Sincronizar'),
         h('button',{onClick:function(){setShowNew(true);},style:{padding:'7px 16px',borderRadius:8,background:'#2D7A50',color:'#fff',border:'none',cursor:'pointer',fontSize:12,fontWeight:700}},'+ Nueva'))),
     // Filters
-    h('div',{style:{background:'#fff',borderBottom:'1px solid #E8E8E8',padding:'12px 24px',display:'flex',gap:20,alignItems:'flex-start',flexWrap:'wrap'}},
+    h('div',{style:{background:'#fff',borderBottom:'1px solid #E8E8E8',padding:'10px 24px',display:'flex',gap:20,alignItems:'flex-start',flexWrap:'wrap'}},
       h('div',null,h('div',{style:{fontSize:10,fontWeight:700,color:'#AAA',marginBottom:5,textTransform:'uppercase'}},'País'),chips(fp,setFp,PAISES)),
       h('div',null,h('div',{style:{fontSize:10,fontWeight:700,color:'#AAA',marginBottom:5,textTransform:'uppercase'}},'Champion'),chips(fc,setFc,CHAMPIONS)),
       h('div',null,h('div',{style:{fontSize:10,fontWeight:700,color:'#AAA',marginBottom:5,textTransform:'uppercase'}},'Prioridad'),chips(fpr,setFpr,PRIORIDADES)),
-      h('div',{style:{marginLeft:'auto'}},h('div',{style:{fontSize:10,fontWeight:700,color:'#AAA',marginBottom:5,textTransform:'uppercase'}},'Buscar'),h('input',{value:search,onChange:function(e){setSearch(e.target.value);},placeholder:'Solicitud, categoría…',style:{padding:'6px 12px',borderRadius:8,border:'1px solid #DDD',fontSize:12,outline:'none',width:200}}))),
+      h('div',null,
+        h('div',{style:{display:'flex',alignItems:'center',gap:8,marginBottom:5}},
+          h('div',{style:{fontSize:10,fontWeight:700,color:'#AAA',textTransform:'uppercase'}},'Semana'),
+          fsem.length>0&&h('button',{onClick:function(){setFsem([]);},style:{fontSize:9,padding:'1px 7px',borderRadius:10,border:'1px solid #DDD',background:'#F5F5F5',color:'#888',cursor:'pointer'}},'Limpiar')),
+        multiChips(fsem,setFsem,semanasDisponibles)),
+      h('div',{style:{marginLeft:'auto'}},
+        h('div',{style:{fontSize:10,fontWeight:700,color:'#AAA',marginBottom:5,textTransform:'uppercase'}},'Buscar'),
+        h('input',{value:search,onChange:function(e){setSearch(e.target.value);},placeholder:'Solicitud, categoría…',style:{padding:'6px 12px',borderRadius:8,border:'1px solid #DDD',fontSize:12,outline:'none',width:200}}))),
     // KPIs
     h('div',{style:{padding:'16px 24px',display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14}},
       h(SC,{label:'Total solicitudes',value:filtered.length,sub:'de '+data.length+' totales',icon:'📋',accent:KG}),
