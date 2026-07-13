@@ -262,7 +262,7 @@ function EditModal(p){
       h('div',{style:{fontSize:11,color:'#999',marginBottom:4}},'#'+form.id+' · '+form.semana),
       h('h2',{style:{fontSize:16,fontWeight:800,color:KG,margin:'0 0 20px',lineHeight:1.4,paddingRight:40}},form.solicitud),
       h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}},
-        [['País','pais',PAISES],['Categoría','categoria',CATEGORIAS],['Tipo','tipo',TIPOS],['Champion','champion',CHAMPIONS],['Prioridad','prioridad',PRIORIDADES],['Estado','estado',ESTADOS]].map(function(x){
+        [['País','pais',PAISES],['Categoría','categoria',CATEGORIAS],['Tipo','tipo',TIPOS],['Prioridad','prioridad',PRIORIDADES],['Estado','estado',ESTADOS]].map(function(x){
           return h(FG,{key:x[1],label:x[0]},h(Sel,{value:form[x[1]],onChange:function(v){set(x[1],v);},opts:x[2]}));
         }),
         h(FG,{label:'Esfuerzo (hrs)'},h('input',{type:'number',value:form.esfuerzo,onChange:function(e){set('esfuerzo',+e.target.value);},style:INP})),
@@ -287,9 +287,10 @@ function NewModal(p){
       h('h2',{style:{fontSize:17,fontWeight:800,color:KG,margin:'0 0 20px'}},'Nueva solicitud'),
       h('div',{style:{marginBottom:14}},h(FG,{label:'Solicitud / Entregable *'},h('input',{value:form.solicitud,onChange:function(e){set('solicitud',e.target.value);},placeholder:'Describe la solicitud...',style:INP}))),
       h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}},
-        [['País','pais',PAISES],['Categoría','categoria',CATEGORIAS],['Tipo','tipo',TIPOS],['Champion','champion',CHAMPIONS],['Prioridad','prioridad',PRIORIDADES],['Semana','semana',SEMANAS]].map(function(x){
+        [['País','pais',PAISES],['Categoría','categoria',CATEGORIAS],['Tipo','tipo',TIPOS],['Prioridad','prioridad',PRIORIDADES],['Semana','semana',SEMANAS]].map(function(x){
           return h(FG,{key:x[1],label:x[0]},h(Sel,{value:form[x[1]],onChange:function(v){set(x[1],v);},opts:x[2]}));
         }),
+        h(FG,{label:'Champion(s)'},h(ChampionPicker,{value:form['champion'],onChange:function(v){set('champion',v);}})),
         h(FG,{label:'Esfuerzo (hrs)'},h('input',{type:'number',value:form.esfuerzo,onChange:function(e){set('esfuerzo',+e.target.value);},style:INP})),
         h(FG,{label:'Fecha límite *'},h('input',{type:'date',value:form.fechaLimite,onChange:function(e){set('fechaLimite',e.target.value);},style:INP}))),
       h('div',{style:{marginTop:14}},h(FG,{label:'Comentarios'},h('textarea',{value:form.comentarios,onChange:function(e){set('comentarios',e.target.value);},rows:2,style:Object.assign({},INP,{resize:'vertical'})}))),
@@ -349,6 +350,32 @@ function App(){
 
   function sb(v){return {padding:'7px 16px',borderRadius:8,border:'none',cursor:'pointer',fontSize:12,fontWeight:700,background:view===v?KG:'#F0F0F0',color:view===v?'#fff':'#555'};}
   // Multi-select chips for semana filter
+  // Champion multi-select picker component
+  function ChampionPicker(p){
+    var [open,setOpen]=useState(false);
+    var selected=p.value?p.value.split(' / ').filter(function(s){return s.trim()!=='';}).map(function(s){return s.trim();}) : [];
+    function toggle(champ){
+      var idx=selected.indexOf(champ);
+      var next=idx===-1?selected.concat([champ]):selected.filter(function(s){return s!==champ;});
+      p.onChange(next.join(' / '));
+    }
+    return h('div',{style:{position:'relative'}},
+      h('div',{onClick:function(){setOpen(!open);},style:{width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid '+(open?KG:'#DDD'),fontSize:12,background:'#FAFAFA',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between',minHeight:36}},
+        h('div',{style:{flex:1,display:'flex',gap:4,flexWrap:'wrap'}},
+          selected.length===0
+            ? h('span',{style:{color:'#AAA'}},'Seleccionar champions...')
+            : selected.map(function(s){return h('span',{key:s,style:{background:KG,color:'#fff',borderRadius:12,padding:'1px 8px',fontSize:10,fontWeight:600}},s.split(' ')[0]);})),
+        h('span',{style:{color:'#AAA',fontSize:10}},open?'▲':'▼')),
+      open&&h('div',{style:{position:'absolute',top:'100%',left:0,right:0,background:'#fff',border:'1px solid #E0E0E0',borderRadius:8,boxShadow:'0 4px 16px rgba(0,0,0,.12)',zIndex:100,maxHeight:200,overflowY:'auto',marginTop:2}},
+        CHAMPIONS.map(function(c){
+          var checked=selected.indexOf(c)!==-1;
+          return h('div',{key:c,onClick:function(){toggle(c);},style:{padding:'8px 12px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,background:checked?'#EBF5EE':'#fff',borderBottom:'1px solid #F5F5F5'}},
+            h('div',{style:{width:16,height:16,borderRadius:3,border:'2px solid '+(checked?KG:'#CCC'),background:checked?KG:'#fff',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}},
+              checked&&h('span',{style:{color:'#fff',fontSize:10,fontWeight:700}},'✓')),
+            h('span',{style:{fontSize:12,color:'#333'}},c));
+        })));
+  }
+
   function multiChips(selected,setSelected,opts){
     return h('div',{style:{display:'flex',gap:4,flexWrap:'wrap',maxWidth:600}},
       opts.map(function(o){
@@ -529,19 +556,21 @@ function App(){
         h('div',{style:{width:1,height:24,background:'rgba(255,255,255,.25)',margin:'0 4px'}}),
         h('button',{onClick:reload,style:{padding:'7px 14px',borderRadius:8,background:'rgba(255,255,255,.1)',color:'#fff',border:'1px solid rgba(255,255,255,.25)',cursor:'pointer',fontSize:12,fontWeight:600}},'🔄 Sincronizar'),
         h('button',{onClick:function(){setShowNew(true);},style:{padding:'7px 16px',borderRadius:8,background:'#2D7A50',color:'#fff',border:'none',cursor:'pointer',fontSize:12,fontWeight:700}},'+ Nueva'))),
-    // Filters
-    h('div',{style:{background:'#fff',borderBottom:'1px solid #E8E8E8',padding:'10px 24px',display:'flex',gap:20,alignItems:'flex-start',flexWrap:'wrap'}},
-      h('div',null,h('div',{style:{fontSize:10,fontWeight:700,color:'#AAA',marginBottom:5,textTransform:'uppercase'}},'País'),chips(fp,setFp,PAISES)),
-      h('div',null,h('div',{style:{fontSize:10,fontWeight:700,color:'#AAA',marginBottom:5,textTransform:'uppercase'}},'Champion'),chips(fc,setFc,CHAMPIONS)),
-      h('div',null,h('div',{style:{fontSize:10,fontWeight:700,color:'#AAA',marginBottom:5,textTransform:'uppercase'}},'Prioridad'),chips(fpr,setFpr,PRIORIDADES)),
-      h('div',null,
-        h('div',{style:{display:'flex',alignItems:'center',gap:8,marginBottom:5}},
-          h('div',{style:{fontSize:10,fontWeight:700,color:'#AAA',textTransform:'uppercase'}},'Semana'),
-          fsem.length>0&&h('button',{onClick:function(){setFsem([]);},style:{fontSize:9,padding:'1px 7px',borderRadius:10,border:'1px solid #DDD',background:'#F5F5F5',color:'#888',cursor:'pointer'}},'Limpiar')),
-        multiChips(fsem,setFsem,semanasDisponibles)),
-      h('div',{style:{marginLeft:'auto'}},
-        h('div',{style:{fontSize:10,fontWeight:700,color:'#AAA',marginBottom:5,textTransform:'uppercase'}},'Buscar'),
-        h('input',{value:search,onChange:function(e){setSearch(e.target.value);},placeholder:'Solicitud, categoría…',style:{padding:'6px 12px',borderRadius:8,border:'1px solid #DDD',fontSize:12,outline:'none',width:200}}))),
+    // Filters - two rows
+    h('div',{style:{background:'#fff',borderBottom:'1px solid #E8E8E8'}},
+      // Row 1: main filters
+      h('div',{style:{padding:'10px 24px',display:'flex',gap:20,alignItems:'flex-start',flexWrap:'wrap'}},
+        h('div',null,h('div',{style:{fontSize:10,fontWeight:700,color:'#AAA',marginBottom:5,textTransform:'uppercase'}},'País'),chips(fp,setFp,PAISES)),
+        h('div',null,h('div',{style:{fontSize:10,fontWeight:700,color:'#AAA',marginBottom:5,textTransform:'uppercase'}},'Champion'),chips(fc,setFc,CHAMPIONS)),
+        h('div',null,h('div',{style:{fontSize:10,fontWeight:700,color:'#AAA',marginBottom:5,textTransform:'uppercase'}},'Prioridad'),chips(fpr,setFpr,PRIORIDADES)),
+        h('div',{style:{marginLeft:'auto'}},
+          h('div',{style:{fontSize:10,fontWeight:700,color:'#AAA',marginBottom:5,textTransform:'uppercase'}},'Buscar'),
+          h('input',{value:search,onChange:function(e){setSearch(e.target.value);},placeholder:'Solicitud, categoría…',style:{padding:'6px 12px',borderRadius:8,border:'1px solid #DDD',fontSize:12,outline:'none',width:200}}))),
+      // Row 2: semana filter (full width)
+      semanasDisponibles.length>0&&h('div',{style:{padding:'6px 24px 10px',borderTop:'1px solid #F0F0F0',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}},
+        h('div',{style:{fontSize:10,fontWeight:700,color:'#AAA',textTransform:'uppercase',whiteSpace:'nowrap'}},'Semana'),
+        multiChips(fsem,setFsem,semanasDisponibles),
+        fsem.length>0&&h('button',{onClick:function(){setFsem([]);},style:{fontSize:9,padding:'2px 9px',borderRadius:10,border:'1px solid #DDD',background:'#F5F5F5',color:'#888',cursor:'pointer',marginLeft:4}},'✕ Limpiar'))),
     // KPIs
     h('div',{style:{padding:'16px 24px',display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14}},
       h(SC,{label:'Total solicitudes',value:filtered.length,sub:'de '+data.length+' totales',icon:'📋',accent:KG}),
