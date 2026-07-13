@@ -120,7 +120,7 @@ var msalApp = new msal.PublicClientApplication({
 var ESTADOS    = ['Pendiente','En progreso','En revisión','Completado'];
 var PAISES     = ['Colombia','México'];
 var CHAMPIONS  = ['David Rodríguez','Katalina Duarte','Andrés Duarte','Marco Flores','María Elena Guzmán','Ángel Balmori','Alberto Sánchez','Abraham De Jesús','Francisco García'];
-var CATEGORIAS = ['Baby','OTC','Hair Care','Cuidado Facial','Cuidado Corporal','Enjuagues Bucales'];
+var CATEGORIAS = ['Baby','OTC','Hair Care','Cuidado Facial','Cuidado Corporal','Enjuagues Bucales','Suncare'];
 var TIPOS      = ['Análisis','Reporte','Dashboard','Planograma','Estrategia','Workshop','Presentación','Otro'];
 var PRIORIDADES= ['Alta','Media','Baja'];
 var SEMANAS    = Array.from({length:52},function(_,i){return 'Sem '+(i+1);});
@@ -252,6 +252,32 @@ function KCard(p){
 
 function Sel(p){return h('select',{value:p.value,onChange:function(e){p.onChange(e.target.value);},style:INP},p.opts.map(function(o){return h('option',{key:o},o);}));}
 
+  // Category multi-select picker component
+  function CategoryPicker(p){
+    var [open,setOpen]=useState(false);
+    var selected=p.value?p.value.split(' / ').filter(function(s){return s.trim()!=='';}).map(function(s){return s.trim();}) : [];
+    function toggle(cat){
+      var idx=selected.indexOf(cat);
+      var next=idx===-1?selected.concat([cat]):selected.filter(function(s){return s!==cat;});
+      p.onChange(next.join(' / '));
+    }
+    return h('div',{style:{position:'relative'}},
+      h('div',{onClick:function(){setOpen(!open);},style:{width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid '+(open?KG:'#DDD'),fontSize:12,background:'#FAFAFA',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between',minHeight:36}},
+        h('div',{style:{flex:1,display:'flex',gap:4,flexWrap:'wrap'}},
+          selected.length===0
+            ? h('span',{style:{color:'#AAA'}},'Seleccionar categorías...')
+            : selected.map(function(s){return h('span',{key:s,style:{background:'#0D6B5E',color:'#fff',borderRadius:12,padding:'1px 8px',fontSize:10,fontWeight:600}},s);})),
+        h('span',{style:{color:'#AAA',fontSize:10}},open?'▲':'▼')),
+      open&&h('div',{style:{position:'absolute',top:'100%',left:0,right:0,background:'#fff',border:'1px solid #E0E0E0',borderRadius:8,boxShadow:'0 4px 16px rgba(0,0,0,.12)',zIndex:100,maxHeight:200,overflowY:'auto',marginTop:2}},
+        CATEGORIAS.map(function(c){
+          var checked=selected.indexOf(c)!==-1;
+          return h('div',{key:c,onClick:function(){toggle(c);},style:{padding:'8px 12px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,background:checked?'#E0F5F2':'#fff',borderBottom:'1px solid #F5F5F5'}},
+            h('div',{style:{width:16,height:16,borderRadius:3,border:'2px solid '+(checked?'#0D6B5E':'#CCC'),background:checked?'#0D6B5E':'#fff',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}},
+              checked&&h('span',{style:{color:'#fff',fontSize:10,fontWeight:700}},'✓')),
+            h('span',{style:{fontSize:12,color:'#333'}},c));
+        })));
+  }
+
   // Champion multi-select picker component
   function ChampionPicker(p){
     var [open,setOpen]=useState(false);
@@ -288,7 +314,7 @@ function EditModal(p){
       h('div',{style:{fontSize:11,color:'#999',marginBottom:4}},'#'+form.id+' · '+form.semana),
       h('h2',{style:{fontSize:16,fontWeight:800,color:KG,margin:'0 0 20px',lineHeight:1.4,paddingRight:40}},form.solicitud),
       h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}},
-        [['País','pais',PAISES],['Categoría','categoria',CATEGORIAS],['Tipo','tipo',TIPOS],['Prioridad','prioridad',PRIORIDADES],['Estado','estado',ESTADOS]].map(function(x){
+        [['País','pais',PAISES],['Tipo','tipo',TIPOS],['Prioridad','prioridad',PRIORIDADES],['Estado','estado',ESTADOS]].map(function(x){
           return h(FG,{key:x[1],label:x[0]},h(Sel,{value:form[x[1]],onChange:function(v){set(x[1],v);},opts:x[2]}));
         }),
         h(FG,{label:'Esfuerzo (hrs)'},h('input',{type:'number',value:form.esfuerzo,onChange:function(e){set('esfuerzo',+e.target.value);},style:INP})),
@@ -304,7 +330,7 @@ function EditModal(p){
 }
 
 function NewModal(p){
-  var [form,setForm]=useState({id:p.nextId,semana:'Sem 1',fecha:new Date().toLocaleDateString('es-CO'),pais:'Colombia',categoria:'Baby',solicitud:'',tipo:'Análisis',champion:'David Rodríguez',prioridad:'Media',esfuerzo:4,fechaLimite:'',estado:'Pendiente',avance:0,comentarios:''});
+  var [form,setForm]=useState({id:p.nextId,semana:'Sem 1',fecha:new Date().toLocaleDateString('es-CO'),pais:'Colombia',categoria:'',solicitud:'',tipo:'Análisis',champion:'David Rodríguez',prioridad:'Media',esfuerzo:4,fechaLimite:'',estado:'Pendiente',avance:0,comentarios:''});
   function set(k,v){setForm(function(f){return Object.assign({},f,{[k]:v});});}
   var ok=form.solicitud.trim().length>3&&form.fechaLimite;
   return h('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:16},onClick:function(e){if(e.target===e.currentTarget)p.onClose();}},
@@ -313,9 +339,10 @@ function NewModal(p){
       h('h2',{style:{fontSize:17,fontWeight:800,color:KG,margin:'0 0 20px'}},'Nueva solicitud'),
       h('div',{style:{marginBottom:14}},h(FG,{label:'Solicitud / Entregable *'},h('input',{value:form.solicitud,onChange:function(e){set('solicitud',e.target.value);},placeholder:'Describe la solicitud...',style:INP}))),
       h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}},
-        [['País','pais',PAISES],['Categoría','categoria',CATEGORIAS],['Tipo','tipo',TIPOS],['Prioridad','prioridad',PRIORIDADES],['Semana','semana',SEMANAS]].map(function(x){
+        [['País','pais',PAISES],['Tipo','tipo',TIPOS],['Prioridad','prioridad',PRIORIDADES],['Semana','semana',SEMANAS]].map(function(x){
           return h(FG,{key:x[1],label:x[0]},h(Sel,{value:form[x[1]],onChange:function(v){set(x[1],v);},opts:x[2]}));
         }),
+        h(FG,{label:'Categoría(s)'},h(CategoryPicker,{value:form['categoria'],onChange:function(v){set('categoria',v);}})),
         h(FG,{label:'Champion(s)'},h(ChampionPicker,{value:form['champion'],onChange:function(v){set('champion',v);}})),
         h(FG,{label:'Esfuerzo (hrs)'},h('input',{type:'number',value:form.esfuerzo,onChange:function(e){set('esfuerzo',+e.target.value);},style:INP})),
         h(FG,{label:'Fecha límite *'},h('input',{type:'date',value:form.fechaLimite,onChange:function(e){set('fechaLimite',e.target.value);},style:INP}))),
