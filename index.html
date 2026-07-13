@@ -190,7 +190,7 @@ function parseRows(rows){
   return rows.map(function(r,i){
     var keys=Object.keys(r);
     function find(){for(var a=0;a<arguments.length;a++){var c=arguments[a];var k=keys.find(function(k){return k.toLowerCase().indexOf(c.toLowerCase())!==-1;});if(k!==undefined)return r[k];}return '';}
-    return {id:Number(find('#','id','num')||i+1),semana:String(find('semana','week')||'Sem 1'),fecha:String(find('fecha sol','fecha_sol')||''),pais:String(find('país','pais','country')||'Colombia'),categoria:String(find('categor')||'Baby'),solicitud:String(find('solicitud','entregable','descripcion')||''),tipo:String(find('tipo','type')||'Análisis'),champion:String(find('champion','responsable','owner')||''),prioridad:String(find('prioridad','priority')||'Media'),esfuerzo:Number(find('esfuerzo','hrs','horas','effort')||0),fechaLimite:String(find('fecha l','deadline','vencimiento','limite')||''),estado:String(find('estado','status','estatus')||'Pendiente'),avance:Number(String(find('avance','progreso','porcentaje')).replace('%','')||0),comentarios:String(find('comentario','nota','comment')||'')};
+    return {id:Number(find('#','id','num')||i+1),semana:String(find('semana','week')||'Sem 1'),fecha:String(find('fecha sol','fecha_sol')||''),pais:String(find('país','pais','country')||'Colombia'),categoria:String(find('categor')||'Baby'),solicitud:String(find('entregable','solicitud / entregable')||''),tipo:String(find('tipo','type')||'Análisis'),champion:String(find('champion','responsable','owner')||''),prioridad:String(find('prioridad','priority')||'Media'),esfuerzo:Number(find('esfuerzo','hrs','horas','effort')||0),fechaLimite:String(find('fecha l','deadline','vencimiento','limite')||''),estado:String(find('estado','status','estatus')||'Pendiente'),avance:Number(String(find('avance','progreso','porcentaje')).replace('%','')||0),comentarios:String(find('comentario','nota','comment')||'')};
   }).filter(function(r){return r.solicitud&&r.solicitud.trim()!=='';});
 }
 async function readSP(){
@@ -485,6 +485,12 @@ function App(){
 
   // ── Dashboard ───────────────────────────────────────────────────────────────
   function dashboard(){
+    // Split hours proportionally among multiple champions or categories
+    function splitHrs(field,hrs,name){
+      var parts=field.split('/').map(function(s){return s.trim();}).filter(function(s){return s!=='';});
+      if(parts.length===0)return 0;
+      return parts.indexOf(name)!==-1?hrs/parts.length:0;
+    }
     var eSt=ESTADOS.map(function(e){return {label:e,value:filtered.filter(function(d){return d.estado===e;}).length,color:SM[e].dot};});
     var ePa=PAISES.map(function(p){return {label:p,value:filtered.filter(function(d){return d.pais===p;}).length,color:p==='Colombia'?COL.accent:MEX.accent};});
     var eCa=CATEGORIAS.map(function(c){return {label:c,value:filtered.filter(function(d){return d.categoria.indexOf(c)!==-1;}).length};});
@@ -543,8 +549,8 @@ function App(){
       h('div',{style:{background:'#fff',borderRadius:14,padding:'18px 20px',border:'1px solid #EBEBEB',boxShadow:'0 2px 8px rgba(0,0,0,.05)'}},
         h('div',{style:{fontSize:12,fontWeight:700,color:'#555',textTransform:'uppercase',marginBottom:14}},'Esfuerzo por champion (hrs)'),
         CHAMPIONS.map(function(c){
-          var hrs=filtered.filter(function(d){return d.champion.indexOf(c)!==-1;}).reduce(function(s,d){return s+d.esfuerzo;},0);
-          var mxH=Math.max.apply(null,CHAMPIONS.map(function(ch){return filtered.filter(function(d){return d.champion.indexOf(ch)!==-1;}).reduce(function(s,d){return s+d.esfuerzo;},0);}).concat([1]));
+          var hrs=Math.round(filtered.reduce(function(s,d){return s+splitHrs(d.champion,d.esfuerzo,c);},0)*10)/10;
+          var mxH=Math.max.apply(null,CHAMPIONS.map(function(ch){return Math.round(filtered.reduce(function(s,d){return s+splitHrs(d.champion,d.esfuerzo,ch);},0)*10)/10;}).concat([1]));
           return h('div',{key:c,style:{marginBottom:12}},h('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:3}},h('span',{style:{fontSize:11,color:'#555'}},c),h('span',{style:{fontSize:11,fontWeight:700,color:KG}},hrs+'h')),h('div',{style:{height:8,background:'#F0F0F0',borderRadius:4,overflow:'hidden'}},h('div',{style:{width:((hrs/mxH)*100)+'%',height:'100%',background:hrs>20?'#C62828':hrs>10?'#E65100':KM,borderRadius:4}})));})),
       h('div',{style:{background:'#fff',borderRadius:14,padding:'18px 20px',border:'1px solid #EBEBEB',boxShadow:'0 2px 8px rgba(0,0,0,.05)'}},
         h('div',{style:{fontSize:12,fontWeight:700,color:'#555',textTransform:'uppercase',marginBottom:14}},'Resumen por país'),
