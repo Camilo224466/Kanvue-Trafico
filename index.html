@@ -394,7 +394,7 @@ function App(){
   async function addItem(item){var nd=data.concat([item]);setData(nd);await save(nd);}
   async function reload(){setStatus('loading');try{var rows=await readSP();setData(rows);setStatus('ready');showToast('✅ '+rows.length+' actualizadas');}catch(e){showToast('❌ '+e.message,'err');setStatus('ready');}}
 
-  var filtered=useMemo(function(){return data.filter(function(d){return (fp==='Todos'||d.pais===fp)&&(fc==='Todos'||d.champion===fc)&&(fpr==='Todos'||d.prioridad===fpr)&&(fsem.length===0||fsem.indexOf(d.semana)!==-1)&&(search===''||d.solicitud.toLowerCase().indexOf(search.toLowerCase())!==-1||d.categoria.toLowerCase().indexOf(search.toLowerCase())!==-1);});}, [data,fp,fc,fpr,search]);
+  var filtered=useMemo(function(){return data.filter(function(d){return (fp==='Todos'||d.pais===fp)&&(fc==='Todos'||d.champion.indexOf(fc)!==-1)&&(fpr==='Todos'||d.prioridad===fpr)&&(fsem.length===0||fsem.indexOf(d.semana)!==-1)&&(search===''||d.solicitud.toLowerCase().indexOf(search.toLowerCase())!==-1||d.categoria.toLowerCase().indexOf(search.toLowerCase())!==-1);});},[data,fp,fc,fpr,fsem,search]);
 
   var nextId=data.length?Math.max.apply(null,data.map(function(d){return d.id;}))+1:1;
   var totalHrs=filtered.reduce(function(s,d){return s+d.esfuerzo;},0);
@@ -487,8 +487,8 @@ function App(){
   function dashboard(){
     var eSt=ESTADOS.map(function(e){return {label:e,value:filtered.filter(function(d){return d.estado===e;}).length,color:SM[e].dot};});
     var ePa=PAISES.map(function(p){return {label:p,value:filtered.filter(function(d){return d.pais===p;}).length,color:p==='Colombia'?COL.accent:MEX.accent};});
-    var eCa=CATEGORIAS.map(function(c){return {label:c,value:filtered.filter(function(d){return d.categoria===c;}).length};});
-    var eCh=CHAMPIONS.map(function(c){return {label:c,value:filtered.filter(function(d){return d.champion===c;}).length};});
+    var eCa=CATEGORIAS.map(function(c){return {label:c,value:filtered.filter(function(d){return d.categoria.indexOf(c)!==-1;}).length};});
+    var eCh=CHAMPIONS.map(function(c){return {label:c,value:filtered.filter(function(d){return d.champion.indexOf(c)!==-1;}).length};});
     function donut(data,title){
       var total=data.reduce(function(s,d){return s+d.value;},0);
       if(!total) return null;
@@ -543,8 +543,8 @@ function App(){
       h('div',{style:{background:'#fff',borderRadius:14,padding:'18px 20px',border:'1px solid #EBEBEB',boxShadow:'0 2px 8px rgba(0,0,0,.05)'}},
         h('div',{style:{fontSize:12,fontWeight:700,color:'#555',textTransform:'uppercase',marginBottom:14}},'Esfuerzo por champion (hrs)'),
         CHAMPIONS.map(function(c){
-          var hrs=filtered.filter(function(d){return d.champion===c;}).reduce(function(s,d){return s+d.esfuerzo;},0);
-          var mxH=Math.max.apply(null,CHAMPIONS.map(function(ch){return filtered.filter(function(d){return d.champion===ch;}).reduce(function(s,d){return s+d.esfuerzo;},0);}).concat([1]));
+          var hrs=filtered.filter(function(d){return d.champion.indexOf(c)!==-1;}).reduce(function(s,d){return s+d.esfuerzo;},0);
+          var mxH=Math.max.apply(null,CHAMPIONS.map(function(ch){return filtered.filter(function(d){return d.champion.indexOf(ch)!==-1;}).reduce(function(s,d){return s+d.esfuerzo;},0);}).concat([1]));
           return h('div',{key:c,style:{marginBottom:12}},h('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:3}},h('span',{style:{fontSize:11,color:'#555'}},c),h('span',{style:{fontSize:11,fontWeight:700,color:KG}},hrs+'h')),h('div',{style:{height:8,background:'#F0F0F0',borderRadius:4,overflow:'hidden'}},h('div',{style:{width:((hrs/mxH)*100)+'%',height:'100%',background:hrs>20?'#C62828':hrs>10?'#E65100':KM,borderRadius:4}})));})),
       h('div',{style:{background:'#fff',borderRadius:14,padding:'18px 20px',border:'1px solid #EBEBEB',boxShadow:'0 2px 8px rgba(0,0,0,.05)'}},
         h('div',{style:{fontSize:12,fontWeight:700,color:'#555',textTransform:'uppercase',marginBottom:14}},'Resumen por país'),
