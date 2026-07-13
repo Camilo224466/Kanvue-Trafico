@@ -485,226 +485,191 @@ function App(){
 
   // ── Dashboard ───────────────────────────────────────────────────────────────
   function dashboard(){
-    // Split hours proportionally among multiple champions/categories
     function splitHrs(field,hrs,name){
       var parts=field.split('/').map(function(s){return s.trim();}).filter(function(s){return s!=='';});
       if(!parts.length)return 0;
       return parts.indexOf(name)!==-1?hrs/parts.length:0;
     }
 
-    // Color palette
     var COL_COLOR='#1A5C3A', MEX_COLOR='#0284C7';
     var COL_BG='#DCFCE7',    MEX_BG='#DBEAFE';
 
-    var totalSols  = filtered.length;
+    // Metrics
+    var total      = filtered.length;
+    var completados= filtered.filter(function(d){return d.estado==='Completado';}).length;
+    var enProgreso = filtered.filter(function(d){return d.estado==='En progreso';}).length;
+    var pendientes = filtered.filter(function(d){return d.estado==='Pendiente';}).length;
+    var enRevision = filtered.filter(function(d){return d.estado==='En revisión';}).length;
     var totalHrsD  = Math.round(filtered.reduce(function(s,d){return s+d.esfuerzo;},0)*10)/10;
-    var completadosPct = totalSols?Math.round(filtered.filter(function(d){return d.estado==='Completado';}).length/totalSols*100):0;
-    var altasPct   = totalSols?Math.round(filtered.filter(function(d){return d.prioridad==='Alta';}).length/totalSols*100):0;
+    var hrsCompletadas = Math.round(filtered.filter(function(d){return d.estado==='Completado';}).reduce(function(s,d){return s+d.esfuerzo;},0)*10)/10;
+    var completadosPct = total?Math.round(completados/total*100):0;
+    var colTotal   = filtered.filter(function(d){return d.pais==='Colombia';}).length;
+    var mexTotal   = filtered.filter(function(d){return d.pais==='México';}).length;
 
-    var eSt=ESTADOS.map(function(e){return {label:e,value:filtered.filter(function(d){return d.estado===e;}).length,color:SM[e].dot};});
-    var ePa=[
-      {label:'Colombia',value:filtered.filter(function(d){return d.pais==='Colombia';}).length,color:COL_COLOR},
-      {label:'México',  value:filtered.filter(function(d){return d.pais==='México';}).length,  color:MEX_COLOR}
+    var eSt=[
+      {label:'Completado', value:completados, color:'#1A5C3A'},
+      {label:'En progreso',value:enProgreso,  color:'#0D8C7A'},
+      {label:'En revisión',value:enRevision,  color:'#7B1FA2'},
+      {label:'Pendiente',  value:pendientes,  color:'#FB8C00'},
     ];
-    var eCa=CATEGORIAS.map(function(c){return {label:c,value:filtered.filter(function(d){return d.categoria.indexOf(c)!==-1;}).length};});
-    var eCh=CHAMPIONS.map(function(c){return {label:c,value:filtered.filter(function(d){return d.champion.indexOf(c)!==-1;}).length};});
+    var ePa=[
+      {label:'Colombia',value:colTotal,color:COL_COLOR},
+      {label:'México',  value:mexTotal,color:MEX_COLOR}
+    ];
+    var eCa=CATEGORIAS.map(function(c){return {label:c,value:filtered.filter(function(d){return d.categoria.indexOf(c)!==-1;}).length};})
+      .filter(function(d){return d.value>0;}).sort(function(a,b){return b.value-a.value;});
+    var eCh=CHAMPIONS.map(function(c){return {label:c,value:filtered.filter(function(d){return d.champion.indexOf(c)!==-1;}).length};})
+      .filter(function(d){return d.value>0;}).sort(function(a,b){return b.value-a.value;});
+    var champHrs=CHAMPIONS.map(function(c){
+      var h2=Math.round(filtered.reduce(function(s,d){return s+splitHrs(d.champion,d.esfuerzo,c);},0)*10)/10;
+      return {label:c,value:h2};
+    }).filter(function(d){return d.value>0;}).sort(function(a,b){return b.value-a.value;});
 
     // Trend by semana
     var allSems=filtered.reduce(function(acc,d){if(d.semana&&acc.indexOf(d.semana)===-1)acc.push(d.semana);return acc;},[])
       .sort(function(a,b){return (parseInt(a.replace(/[^0-9]/g,''))||0)-(parseInt(b.replace(/[^0-9]/g,''))||0);});
     var trendData=allSems.map(function(sem){
       var rows=filtered.filter(function(d){return d.semana===sem;});
-      return {sem:sem, sols:rows.length, hrs:Math.round(rows.reduce(function(s,d){return s+d.esfuerzo;},0)*10)/10};
+      return {sem:sem,sols:rows.length,hrs:Math.round(rows.reduce(function(s,d){return s+d.esfuerzo;},0)*10)/10};
     });
 
-    // ── Sub-components ───────────────────────────────────────────────────────
-    function KpiCard(p){
-      return h('div',{style:{background:'#fff',borderRadius:14,padding:'20px 24px',border:'1px solid #E8E8E8',boxShadow:'0 2px 12px rgba(0,0,0,.06)',display:'flex',flexDirection:'column',gap:6}},
-        h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between'}},
-          h('span',{style:{fontSize:11,fontWeight:700,color:'#888',textTransform:'uppercase',letterSpacing:'0.6px'}},'p.label'),
-          h('div',{style:{width:36,height:36,borderRadius:10,background:p.iconBg||'#EBF5EE',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}},p.icon)),
-        h('div',{style:{fontSize:36,fontWeight:900,color:p.color||KG,lineHeight:1}},p.value),
-        p.sub&&h('div',{style:{fontSize:11,color:'#999',marginTop:2}},p.sub));
-    }
-
+    // ── Components ──────────────────────────────────────────────────────────
     function Donut(p){
       var data=p.data.filter(function(d){return d.value>0;});
-      var total=data.reduce(function(s,d){return s+d.value;},0);
-      if(!total)return null;
-      var cum=0,R=56,cx=72,cy=72,st=20,ci=2*Math.PI*R;
-      var slices=data.map(function(d){var pct=d.value/total,o=ci*(1-cum-pct);cum+=pct;return {label:d.label,value:d.value,color:d.color,o:o,dash:ci*pct};});
+      var total2=data.reduce(function(s,d){return s+d.value;},0);
+      if(!total2)return null;
+      var cum=0,R=54,cx=70,cy=70,st=20,ci=2*Math.PI*R;
+      var slices=data.map(function(d){var pct=d.value/total2,o=ci*(1-cum-pct);cum+=pct;return{label:d.label,value:d.value,color:d.color,o:o,dash:ci*pct};});
       return h('div',{style:{background:'#fff',borderRadius:14,padding:'24px',border:'1px solid #E8E8E8',boxShadow:'0 2px 12px rgba(0,0,0,.06)'}},
         h('div',{style:{fontSize:11,fontWeight:700,color:'#888',textTransform:'uppercase',letterSpacing:'0.6px',marginBottom:16}},p.title),
-        h('div',{style:{display:'flex',alignItems:'center',gap:24}},
-          h('svg',{width:144,height:144,viewBox:'0 0 144 144',style:{flexShrink:0}},
+        h('div',{style:{display:'flex',alignItems:'center',gap:20}},
+          h('svg',{width:140,height:140,viewBox:'0 0 140 140',style:{flexShrink:0}},
             h('circle',{cx:cx,cy:cy,r:R,fill:'none',stroke:'#F0F0F0',strokeWidth:st}),
             slices.map(function(s,i){return h('circle',{key:i,cx:cx,cy:cy,r:R,fill:'none',stroke:s.color,strokeWidth:st,strokeDasharray:s.dash+' '+(ci-s.dash),strokeDashoffset:s.o,style:{transform:'rotate(-90deg)',transformOrigin:cx+'px '+cy+'px'}});}),
-            h('text',{x:cx,y:cy-6,textAnchor:'middle',fontSize:28,fontWeight:900,fill:KG,fontFamily:'Roboto,sans-serif'},total),
-            h('text',{x:cx,y:cy+14,textAnchor:'middle',fontSize:10,fill:'#AAA',fontFamily:'Roboto,sans-serif'},'TOTAL')),
-          h('div',{style:{display:'flex',flexDirection:'column',gap:10,flex:1}},
+            h('text',{x:cx,y:cy-5,textAnchor:'middle',fontSize:26,fontWeight:900,fill:KG,fontFamily:'Roboto,sans-serif'},total2),
+            h('text',{x:cx,y:cy+13,textAnchor:'middle',fontSize:9,fill:'#AAA',fontFamily:'Roboto,sans-serif'},'TOTAL')),
+          h('div',{style:{display:'flex',flexDirection:'column',gap:8,flex:1}},
             slices.map(function(s,i){
-              var pct=Math.round(s.value/total*100);
+              var pct=Math.round(s.value/total2*100);
               return h('div',{key:i},
-                h('div',{style:{display:'flex',alignItems:'center',gap:8,marginBottom:3}},
-                  h('div',{style:{width:10,height:10,borderRadius:2,background:s.color,flexShrink:0}}),
+                h('div',{style:{display:'flex',alignItems:'center',gap:6,marginBottom:3}},
+                  h('div',{style:{width:9,height:9,borderRadius:2,background:s.color,flexShrink:0}}),
                   h('span',{style:{fontSize:11,color:'#555',flex:1}},s.label),
-                  h('span',{style:{fontSize:13,fontWeight:800,color:s.color}},s.value)),
-                h('div',{style:{height:4,background:'#F0F0F0',borderRadius:2}},
+                  h('span',{style:{fontSize:12,fontWeight:800,color:s.color}},s.value)),
+                h('div',{style:{height:3,background:'#F0F0F0',borderRadius:2}},
                   h('div',{style:{width:pct+'%',height:'100%',background:s.color,borderRadius:2}})));
             }))));
     }
 
     function HBar(p){
-      var data=p.data.filter(function(d){return d.value>0;});
-      if(!data.length)return null;
-      var mx=Math.max.apply(null,data.map(function(d){return d.value;}).concat([1]));
+      if(!p.data.length)return null;
+      var mx=Math.max.apply(null,p.data.map(function(d){return d.value;}).concat([1]));
       return h('div',{style:{background:'#fff',borderRadius:14,padding:'24px',border:'1px solid #E8E8E8',boxShadow:'0 2px 12px rgba(0,0,0,.06)'}},
         h('div',{style:{fontSize:11,fontWeight:700,color:'#888',textTransform:'uppercase',letterSpacing:'0.6px',marginBottom:16}},p.title),
         h('div',{style:{display:'flex',flexDirection:'column',gap:10}},
-          data.map(function(d,i){
-            return h('div',{key:i},
-              h('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:4}},
-                h('span',{style:{fontSize:11,color:'#444',fontWeight:500}},d.label),
-                h('span',{style:{fontSize:12,fontWeight:800,color:p.accent||KG}},d.value+(p.suffix||''))),
-              h('div',{style:{height:8,background:'#F0F0F0',borderRadius:4,overflow:'hidden'}},
-                h('div',{style:{width:((d.value/mx)*100)+'%',height:'100%',background:d.color||p.accent||KG,borderRadius:4,transition:'width 0.6s'}})));
-          })));
-    }
-
-    // Trend SVG line chart
-    function TrendChart(){
-      if(trendData.length<2) return null;
-      var W=560,H=180,PL=44,PR=16,PT=16,PB=36;
-      var cW=W-PL-PR, cH=H-PT-PB;
-      var maxSols=Math.max.apply(null,trendData.map(function(d){return d.sols;}).concat([1]));
-      var maxHrs =Math.max.apply(null,trendData.map(function(d){return d.hrs;}).concat([1]));
-      var n=trendData.length;
-      var xStep=n>1?cW/(n-1):cW;
-      function xp(i){return PL+i*xStep;}
-      function ypSols(v){return PT+cH-(v/maxSols)*cH;}
-      function ypHrs(v) {return PT+cH-(v/maxHrs)*cH;}
-      var solPts=trendData.map(function(d,i){return xp(i)+','+ypSols(d.sols);}).join(' ');
-      var hrsPts =trendData.map(function(d,i){return xp(i)+','+ypHrs(d.hrs);}).join(' ');
-      // Grid lines
-      var gridLines=[0,0.25,0.5,0.75,1].map(function(f,i){
-        var y=PT+cH-(f*cH);
-        return h('line',{key:i,x1:PL,y1:y,x2:W-PR,y2:y,stroke:'#F0F0F0',strokeWidth:1});
-      });
-      // Y axis labels
-      var yLabels=[0,Math.round(maxSols*0.5),maxSols].map(function(v,i){
-        var y=PT+cH-(v/maxSols)*cH;
-        return h('text',{key:i,x:PL-6,y:y+4,textAnchor:'end',fontSize:9,fill:'#AAA'},v);
-      });
-      // X axis labels
-      var xLabels=trendData.map(function(d,i){
-        return h('text',{key:i,x:xp(i),y:H-6,textAnchor:'middle',fontSize:9,fill:'#AAA'},d.sem);
-      });
-      // Dots
-      var solDots=trendData.map(function(d,i){
-        return h('circle',{key:i,cx:xp(i),cy:ypSols(d.sols),r:4,fill:COL_COLOR,stroke:'#fff',strokeWidth:2});
-      });
-      var hrsDots=trendData.map(function(d,i){
-        return h('circle',{key:i,cx:xp(i),cy:ypHrs(d.hrs),r:4,fill:MEX_COLOR,stroke:'#fff',strokeWidth:2});
-      });
-      return h('div',{style:{background:'#fff',borderRadius:14,padding:'24px',border:'1px solid #E8E8E8',boxShadow:'0 2px 12px rgba(0,0,0,.06)',gridColumn:'1 / -1'}},
-        h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}},
-          h('div',{style:{fontSize:11,fontWeight:700,color:'#888',textTransform:'uppercase',letterSpacing:'0.6px'}},'Tendencia por semana'),
-          h('div',{style:{display:'flex',gap:16}},
-            h('div',{style:{display:'flex',alignItems:'center',gap:6}},h('div',{style:{width:24,height:3,background:COL_COLOR,borderRadius:2}}),h('span',{style:{fontSize:11,color:'#555'}},'# Solicitudes')),
-            h('div',{style:{display:'flex',alignItems:'center',gap:6}},h('div',{style:{width:24,height:3,background:MEX_COLOR,borderRadius:2}}),h('span',{style:{fontSize:11,color:'#555'}},'Horas')))),
-        h('svg',{width:'100%',viewBox:'0 0 '+W+' '+H,style:{overflow:'visible'}},
-          gridLines,yLabels,xLabels,
-          h('polyline',{points:solPts,fill:'none',stroke:COL_COLOR,strokeWidth:2.5,strokeLinejoin:'round'}),
-          h('polyline',{points:hrsPts, fill:'none',stroke:MEX_COLOR, strokeWidth:2.5,strokeLinejoin:'round',strokeDasharray:'5 3'}),
-          solDots,hrsDots));
-    }
-
-    // Champion hours
-    function ChampHrs(){
-      var data=CHAMPIONS.map(function(c){
-        var hrs=Math.round(filtered.reduce(function(s,d){return s+splitHrs(d.champion,d.esfuerzo,c);},0)*10)/10;
-        return {label:c,value:hrs};
-      }).filter(function(d){return d.value>0;})
-        .sort(function(a,b){return b.value-a.value;});
-      var mx=Math.max.apply(null,data.map(function(d){return d.value;}).concat([1]));
-      if(!data.length)return null;
-      return h('div',{style:{background:'#fff',borderRadius:14,padding:'24px',border:'1px solid #E8E8E8',boxShadow:'0 2px 12px rgba(0,0,0,.06)'}},
-        h('div',{style:{fontSize:11,fontWeight:700,color:'#888',textTransform:'uppercase',letterSpacing:'0.6px',marginBottom:16}},'Carga por champion (hrs)'),
-        h('div',{style:{display:'flex',flexDirection:'column',gap:10}},
-          data.map(function(d,i){
+          p.data.map(function(d,i){
             var pct=(d.value/mx)*100;
-            var color=pct>75?'#C62828':pct>50?'#E65100':KM;
+            var color=p.colorFn?p.colorFn(pct):(d.color||p.accent||KG);
             return h('div',{key:i},
-              h('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:4}},
+              h('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:3}},
                 h('span',{style:{fontSize:11,color:'#444',fontWeight:500}},d.label),
-                h('span',{style:{fontSize:12,fontWeight:800,color:color}},d.value+'h')),
-              h('div',{style:{height:8,background:'#F0F0F0',borderRadius:4,overflow:'hidden'}},
+                h('span',{style:{fontSize:12,fontWeight:800,color:color}},d.value+(p.suffix||''))),
+              h('div',{style:{height:7,background:'#F0F0F0',borderRadius:4,overflow:'hidden'}},
                 h('div',{style:{width:pct+'%',height:'100%',background:color,borderRadius:4,transition:'width 0.6s'}})));
           })));
     }
 
-    // Country summary
-    function PaisSummary(){
-      var cols=[
-        {pais:'Colombia',color:COL_COLOR,bg:COL_BG},
-        {pais:'México',  color:MEX_COLOR, bg:MEX_BG}
+    // Status summary strip
+    function StatusStrip(){
+      var items=[
+        {label:'Completado',value:completados,color:'#1A5C3A',bg:'#DCFCE7'},
+        {label:'En progreso',value:enProgreso,color:'#0D8C7A',bg:'#CCFBF1'},
+        {label:'En revisión',value:enRevision,color:'#7B1FA2',bg:'#F3E8FF'},
+        {label:'Pendiente',  value:pendientes,color:'#D97706',bg:'#FEF3C7'},
       ];
-      return h('div',{style:{background:'#fff',borderRadius:14,padding:'24px',border:'1px solid #E8E8E8',boxShadow:'0 2px 12px rgba(0,0,0,.06)'}},
-        h('div',{style:{fontSize:11,fontWeight:700,color:'#888',textTransform:'uppercase',letterSpacing:'0.6px',marginBottom:16}},'Resumen por país'),
+      return h('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}},
+        items.map(function(it){
+          var pct=total?Math.round(it.value/total*100):0;
+          return h('div',{key:it.label,style:{background:it.bg,borderRadius:12,padding:'16px 20px',border:'1px solid '+it.color+'33'}},
+            h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}},
+              h('span',{style:{fontSize:10,fontWeight:700,color:it.color,textTransform:'uppercase',letterSpacing:'0.5px'}},it.label),
+              h('span',{style:{fontSize:22,fontWeight:900,color:it.color}},it.value)),
+            h('div',{style:{height:4,background:'rgba(0,0,0,.08)',borderRadius:2}},
+              h('div',{style:{width:pct+'%',height:'100%',background:it.color,borderRadius:2}})),
+            h('div',{style:{fontSize:10,color:it.color,marginTop:4,fontWeight:600}},pct+'% del total'));
+        }));
+    }
+
+    // Country cards
+    function PaisCards(){
+      var cols=[
+        {pais:'Colombia',color:COL_COLOR,bg:COL_BG,flag:'🇨🇴',total:colTotal},
+        {pais:'México',  color:MEX_COLOR, bg:MEX_BG, flag:'🇲🇽',total:mexTotal}
+      ];
+      return h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}},
         cols.map(function(c){
           var items=filtered.filter(function(d){return d.pais===c.pais;});
           var done=items.filter(function(d){return d.estado==='Completado';}).length;
-          var hrs=Math.round(items.reduce(function(s,d){return s+d.esfuerzo;},0)*10)/10;
+          var hrs2=Math.round(items.reduce(function(s,d){return s+d.esfuerzo;},0)*10)/10;
           var pct=items.length?Math.round(done/items.length*100):0;
-          return h('div',{key:c.pais,style:{marginBottom:16,padding:16,background:c.bg,borderRadius:12,border:'1px solid '+c.color+'33'}},
-            h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}},
+          return h('div',{key:c.pais,style:{background:c.bg,borderRadius:12,padding:'20px',border:'2px solid '+c.color+'44'}},
+            h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}},
               h('div',{style:{display:'flex',alignItems:'center',gap:8}},
-                h('span',{style:{fontSize:18}},(c.pais==='Colombia'?'🇨🇴':'🇲🇽')),
-                h('span',{style:{fontWeight:800,color:c.color,fontSize:15}}),c.pais),
-              h('div',{style:{fontSize:12,fontWeight:700,color:c.color,background:'#fff',padding:'3px 10px',borderRadius:20,border:'1px solid '+c.color+'44'}},pct+'% completado')),
+                h('span',{style:{fontSize:20}},c.flag),
+                h('span',{style:{fontWeight:800,color:c.color,fontSize:15}},c.pais)),
+              h('div',{style:{fontSize:13,fontWeight:800,color:'#fff',background:c.color,padding:'4px 12px',borderRadius:20}},pct+'% ✓')),
             h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}},
-              [['Solicitudes',items.length],['Completadas',done],['Horas',hrs+'h']].map(function(x){
-                return h('div',{key:x[0],style:{textAlign:'center',background:'#fff',borderRadius:8,padding:'10px 4px'}},
+              [['Solicitudes',c.total],['Completadas',done],['Horas',hrs2+'h']].map(function(x){
+                return h('div',{key:x[0],style:{textAlign:'center',background:'rgba(255,255,255,0.7)',borderRadius:8,padding:'10px 4px'}},
                   h('div',{style:{fontSize:22,fontWeight:900,color:c.color}},x[1]),
-                  h('div',{style:{fontSize:10,color:'#777',marginTop:2}},x[0]));
+                  h('div',{style:{fontSize:9,color:'#777',marginTop:2,textTransform:'uppercase',letterSpacing:'0.3px'}},x[0]));
               })));
         }));
     }
 
+    // Trend chart (compact)
+    function TrendChart(){
+      if(trendData.length<2)return null;
+      var W=600,H=140,PL=40,PR=16,PT=12,PB=28;
+      var cW=W-PL-PR, cH=H-PT-PB;
+      var maxSols=Math.max.apply(null,trendData.map(function(d){return d.sols;}).concat([1]));
+      var maxHrs2=Math.max.apply(null,trendData.map(function(d){return d.hrs;}).concat([1]));
+      var n=trendData.length;
+      var xStep=n>1?cW/(n-1):cW;
+      function xp(i){return PL+i*xStep;}
+      function ypS(v){return PT+cH-(v/maxSols)*cH;}
+      function ypH(v){return PT+cH-(v/maxHrs2)*cH;}
+      var solPts=trendData.map(function(d,i){return xp(i)+','+ypS(d.sols);}).join(' ');
+      var hrsPts=trendData.map(function(d,i){return xp(i)+','+ypH(d.hrs);}).join(' ');
+      var gridYs=[0,0.5,1];
+      return h('div',{style:{background:'#fff',borderRadius:14,padding:'20px 24px',border:'1px solid #E8E8E8',boxShadow:'0 2px 12px rgba(0,0,0,.06)'}},
+        h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}},
+          h('div',{style:{fontSize:11,fontWeight:700,color:'#888',textTransform:'uppercase',letterSpacing:'0.6px'}},'Tendencia por semana'),
+          h('div',{style:{display:'flex',gap:16}},
+            h('div',{style:{display:'flex',alignItems:'center',gap:5}},h('div',{style:{width:20,height:3,background:COL_COLOR,borderRadius:2}}),h('span',{style:{fontSize:10,color:'#666'}},'Solicitudes')),
+            h('div',{style:{display:'flex',alignItems:'center',gap:5}},h('div',{style:{width:20,height:3,background:MEX_COLOR,borderRadius:2,opacity:0.7}}),h('span',{style:{fontSize:10,color:'#666'}},'Horas')))),
+        h('svg',{width:'100%',viewBox:'0 0 '+W+' '+H,style:{overflow:'visible'}},
+          gridYs.map(function(f,i){var y=PT+cH-f*cH;return h('line',{key:i,x1:PL,y1:y,x2:W-PR,y2:y,stroke:'#F0F0F0',strokeWidth:1});}),
+          [0,Math.round(maxSols/2),maxSols].map(function(v,i){var y=PT+cH-(v/maxSols)*cH;return h('text',{key:i,x:PL-5,y:y+4,textAnchor:'end',fontSize:8,fill:'#AAA'},v);}),
+          trendData.map(function(d,i){return h('text',{key:i,x:xp(i),y:H-4,textAnchor:'middle',fontSize:8,fill:'#AAA'},d.sem);}),
+          h('polyline',{points:solPts,fill:'none',stroke:COL_COLOR,strokeWidth:2,strokeLinejoin:'round'}),
+          h('polyline',{points:hrsPts,fill:'none',stroke:MEX_COLOR,strokeWidth:2,strokeLinejoin:'round',strokeDasharray:'4 3'}),
+          trendData.map(function(d,i){return h('circle',{key:'s'+i,cx:xp(i),cy:ypS(d.sols),r:3,fill:COL_COLOR,stroke:'#fff',strokeWidth:1.5});}),
+          trendData.map(function(d,i){return h('circle',{key:'h'+i,cx:xp(i),cy:ypH(d.hrs),r:3,fill:MEX_COLOR,stroke:'#fff',strokeWidth:1.5});})));
+    }
+
     return h('div',{style:{display:'flex',flexDirection:'column',gap:16}},
-      // KPI row
-      h('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}},
-        h('div',{style:{background:'#fff',borderRadius:14,padding:'20px 24px',border:'1px solid #E8E8E8',boxShadow:'0 2px 12px rgba(0,0,0,.06)',display:'flex',flexDirection:'column',gap:6}},
-          h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between'}},h('span',{style:{fontSize:11,fontWeight:700,color:'#888',textTransform:'uppercase',letterSpacing:'0.6px'}},'Total Solicitudes'),h('div',{style:{width:36,height:36,borderRadius:10,background:'#EBF5EE',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}},'📋')),
-          h('div',{style:{fontSize:36,fontWeight:900,color:KG,lineHeight:1}},totalSols),
-          h('div',{style:{fontSize:11,color:'#999',marginTop:2}},'filtradas actualmente')),
-        h('div',{style:{background:'#fff',borderRadius:14,padding:'20px 24px',border:'1px solid #E8E8E8',boxShadow:'0 2px 12px rgba(0,0,0,.06)',display:'flex',flexDirection:'column',gap:6}},
-          h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between'}},h('span',{style:{fontSize:11,fontWeight:700,color:'#888',textTransform:'uppercase',letterSpacing:'0.6px'}},'% Completado'),h('div',{style:{width:36,height:36,borderRadius:10,background:'#EBF5EE',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}},'✅')),
-          h('div',{style:{fontSize:36,fontWeight:900,color:KM,lineHeight:1}},completadosPct+'%'),
-          h('div',{style:{fontSize:11,color:'#999',marginTop:2}},'del total filtrado')),
-        h('div',{style:{background:'#fff',borderRadius:14,padding:'20px 24px',border:'1px solid #E8E8E8',boxShadow:'0 2px 12px rgba(0,0,0,.06)',display:'flex',flexDirection:'column',gap:6}},
-          h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between'}},h('span',{style:{fontSize:11,fontWeight:700,color:'#888',textTransform:'uppercase',letterSpacing:'0.6px'}},'Horas Estimadas'),h('div',{style:{width:36,height:36,borderRadius:10,background:'#E0F5F2',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}},'⏱')),
-          h('div',{style:{fontSize:36,fontWeight:900,color:KT,lineHeight:1}},totalHrsD+'h'),
-          h('div',{style:{fontSize:11,color:'#999',marginTop:2}},'esfuerzo total')),
-        h('div',{style:{background:'#fff',borderRadius:14,padding:'20px 24px',border:'1px solid #E8E8E8',boxShadow:'0 2px 12px rgba(0,0,0,.06)',display:'flex',flexDirection:'column',gap:6}},
-          h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between'}},h('span',{style:{fontSize:11,fontWeight:700,color:'#888',textTransform:'uppercase',letterSpacing:'0.6px'}},'Prioridad Alta'),h('div',{style:{width:36,height:36,borderRadius:10,background:'#FFEBEE',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}},'🔴')),
-          h('div',{style:{fontSize:36,fontWeight:900,color:'#C62828',lineHeight:1}},altasPct+'%'),
-          h('div',{style:{fontSize:11,color:'#999',marginTop:2}},'del total filtrado'))),
-      // Trend chart full width
-      h(TrendChart,null),
-      // Donuts row
+      h(StatusStrip,null),
       h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}},
         h(Donut,{data:eSt,title:'Estado de solicitudes'}),
-        h(Donut,{data:ePa,title:'Distribución por país'})),
-      // Bars + summary row
+        h(PaisCards,null)),
       h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}},
-        h(HBar,{data:eCa.filter(function(d){return d.value>0;}),title:'Solicitudes por categoría',accent:KG}),
-        h(HBar,{data:eCh.filter(function(d){return d.value>0;}),title:'Solicitudes por champion',accent:'#2D7A50'})),
-      // Hours + country
-      h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}},
-        h(ChampHrs,null),
-        h(PaisSummary,null)));
+        h(HBar,{data:eCa,title:'Solicitudes por categoría',accent:KG}),
+        h(HBar,{data:eCh,title:'Solicitudes por champion',accent:'#2D7A50'})),
+      h(HBar,{data:champHrs,title:'Horas estimadas por champion',suffix:'h',colorFn:function(pct){return pct>75?'#C62828':pct>50?'#E65100':KM;}}),
+      h(TrendChart,null));
   }
+
 
 
   var semanasDisponibles=data.reduce(function(acc,d){
@@ -769,3 +734,5 @@ ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(
 </script>
 </body>
 </html>
+
+
