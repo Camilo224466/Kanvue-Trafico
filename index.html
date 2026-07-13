@@ -516,7 +516,8 @@ function App(){
       {label:'Colombia',value:colTotal,color:COL_COLOR},
       {label:'México',  value:mexTotal,color:MEX_COLOR}
     ];
-    var eCa=CATEGORIAS.map(function(c){return {label:c,value:filtered.filter(function(d){return d.categoria.indexOf(c)!==-1;}).length};})
+    var CAT_COLORS=['#1A5C3A','#0284C7','#7B1FA2','#D97706','#C62828','#0D8C7A','#0891B2'];
+    var eCa=CATEGORIAS.map(function(c,i){return {label:c,value:filtered.filter(function(d){return d.categoria.indexOf(c)!==-1;}).length,color:CAT_COLORS[i%CAT_COLORS.length]};})
       .filter(function(d){return d.value>0;}).sort(function(a,b){return b.value-a.value;});
     var eCh=CHAMPIONS.map(function(c){return {label:c,value:filtered.filter(function(d){return d.champion.indexOf(c)!==-1;}).length};})
       .filter(function(d){return d.value>0;}).sort(function(a,b){return b.value-a.value;});
@@ -539,12 +540,19 @@ function App(){
       var total2=data.reduce(function(s,d){return s+d.value;},0);
       if(!total2)return null;
       var cum=0,R=54,cx=70,cy=70,st=20,ci=2*Math.PI*R;
-      var slices=data.map(function(d){var pct=d.value/total2,o=ci*(1-cum-pct);cum+=pct;return{label:d.label,value:d.value,color:d.color,o:o,dash:ci*pct};});
+      var slices=data.map(function(d){
+        var pct=d.value/total2,o=ci*(1-cum-pct);
+        cum+=pct;
+        return{label:d.label,value:d.value,color:d.color,o:o,dash:ci*pct,gap:ci*(1-pct)};
+      });
+      // Total arc covered — if 100% covered no grey shows
+      var totalDash=slices.reduce(function(s,sl){return s+sl.dash;},0);
+      var showBg=totalDash<ci*0.99; // only show grey if not fully covered
       return h('div',{style:{background:'#fff',borderRadius:14,padding:'24px',border:'1px solid #E8E8E8',boxShadow:'0 2px 12px rgba(0,0,0,.06)'}},
         h('div',{style:{fontSize:11,fontWeight:700,color:'#888',textTransform:'uppercase',letterSpacing:'0.6px',marginBottom:16}},p.title),
         h('div',{style:{display:'flex',alignItems:'center',gap:20}},
           h('svg',{width:140,height:140,viewBox:'0 0 140 140',style:{flexShrink:0}},
-            h('circle',{cx:cx,cy:cy,r:R,fill:'none',stroke:'#F0F0F0',strokeWidth:st}),
+            showBg&&h('circle',{cx:cx,cy:cy,r:R,fill:'none',stroke:'#F0F0F0',strokeWidth:st}),
             slices.map(function(s,i){return h('circle',{key:i,cx:cx,cy:cy,r:R,fill:'none',stroke:s.color,strokeWidth:st,strokeDasharray:s.dash+' '+(ci-s.dash),strokeDashoffset:s.o,style:{transform:'rotate(-90deg)',transformOrigin:cx+'px '+cy+'px'}});}),
             h('text',{x:cx,y:cy-5,textAnchor:'middle',fontSize:26,fontWeight:900,fill:KG,fontFamily:'Roboto,sans-serif'},total2),
             h('text',{x:cx,y:cy+13,textAnchor:'middle',fontSize:9,fill:'#AAA',fontFamily:'Roboto,sans-serif'},'TOTAL')),
@@ -662,7 +670,8 @@ function App(){
       h(StatusStrip,null),
       h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}},
         h(Donut,{data:eSt,title:'Estado de solicitudes'}),
-        h(PaisCards,null)),
+        h(Donut,{data:eCa,title:'Solicitudes por categoría'})),
+      h(PaisCards,null),
       h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}},
         h(HBar,{data:eCa,title:'Solicitudes por categoría',accent:KG}),
         h(HBar,{data:eCh,title:'Solicitudes por champion',accent:'#2D7A50'})),
@@ -734,5 +743,3 @@ ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(
 </script>
 </body>
 </html>
-
-
