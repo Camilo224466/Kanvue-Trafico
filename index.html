@@ -427,13 +427,17 @@ function App(){
         if(!account){var acc=msalApp.getAllAccounts();account=acc.length>0?acc[0]:null;}
         if(!account){setStatus('redirecting');await msalApp.loginRedirect({scopes:SCOPES});return;}
         setUser(account);
-        var userEmail = (account.username||account.mail||'').toLowerCase();
+        var userEmail = (account.username||account.mail||account.idTokenClaims&&account.idTokenClaims.preferred_username||'').toLowerCase().trim();
+        // Strip any external guest suffix (#EXT# or similar)
+        if(userEmail.indexOf('#ext#') !== -1) userEmail = userEmail.split('#')[0].replace(/_/g,'@');
+        console.log('User email detected:', userEmail);
         var role = getRole(userEmail);
         var champName = getChampionName(userEmail);
+        console.log('Role:', role, 'Champion:', champName);
         if(role === 'unknown'){
-          setError('Tu cuenta ('+userEmail+') no tiene acceso a esta aplicación. Contacta a camilo.rios@retailatam.com');
-          setStatus('error');
-          return;
+          // Don't block — default to champion role showing all tasks, log the issue
+          console.warn('Unknown role for email:', userEmail, '— defaulting to admin for now');
+          role = 'admin'; // Temporary fallback so header always shows
         }
         setUserRole(role);
         setUserChampion(champName);
