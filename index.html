@@ -765,7 +765,7 @@ function App(){
   });
   return h('div',{style:{minHeight:'100vh',background:'#F0F4F1'}},
     // Header
-    h('div',{style:{background:KG,padding:'0 24px',display:'flex',alignItems:'center',justifyContent:'space-between',height:58,flexWrap:'wrap',gap:8}},
+    h('div',{style:{background:KG,padding:'0 24px',display:'flex',alignItems:'center',justifyContent:'space-between',height:58,flexWrap:'wrap',gap:8,position:'sticky',top:0,zIndex:500}},
       h('div',{style:{display:'flex',alignItems:'center',gap:16}},
         h('img',{src:'data:image/png;base64,'+LOGO_B64,alt:'RetailATAM',style:{height:34,objectFit:'contain',filter:'brightness(0) invert(1)'}}),
         h('div',{style:{width:1,height:32,background:'rgba(255,255,255,.25)'}}),
@@ -783,7 +783,7 @@ function App(){
         h('button',{onClick:reload,style:{padding:'7px 14px',borderRadius:8,background:'rgba(255,255,255,.1)',color:'#fff',border:'1px solid rgba(255,255,255,.25)',cursor:'pointer',fontSize:12,fontWeight:600}},'🔄 Sincronizar'),
         h('button',{onClick:function(){setShowNew(true);},style:{padding:'7px 16px',borderRadius:8,background:'#2D7A50',color:'#fff',border:'none',cursor:'pointer',fontSize:12,fontWeight:700}},'+ Nueva'))),
     // Filters - two rows
-    h('div',{style:{background:'#fff',borderBottom:'1px solid #E8E8E8'}},
+    h('div',{style:{background:'#fff',borderBottom:'1px solid #E8E8E8',position:'sticky',top:58,zIndex:499}},
       // Row 1: main filters
       h('div',{style:{padding:'10px 24px',display:'flex',gap:20,alignItems:'flex-start',flexWrap:'wrap'}},
         h('div',null,h('div',{style:{fontSize:10,fontWeight:700,color:'#AAA',marginBottom:5,textTransform:'uppercase'}},'País'),chips(fp,setFp,PAISES)),
