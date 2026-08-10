@@ -125,6 +125,30 @@ var TIPOS      = ['Análisis','Reporte','Dashboard','Planograma','Estrategia','W
 var PRIORIDADES= ['Alta','Media','Baja'];
 var SEMANAS    = Array.from({length:52},function(_,i){return 'Sem '+(i+1);});
 
+// Map semana number → display label (Mes - Semana X del mes)
+// Project started Sem 1 = first week of June 2026
+var SEM_LABELS = (function(){
+  var months = ['Junio','Junio','Junio','Junio',
+    'Julio','Julio','Julio','Julio',
+    'Agosto','Agosto','Agosto','Agosto',
+    'Septiembre','Septiembre','Septiembre','Septiembre',
+    'Octubre','Octubre','Octubre','Octubre',
+    'Noviembre','Noviembre','Noviembre','Noviembre',
+    'Diciembre','Diciembre','Diciembre','Diciembre'];
+  var weekInMonth = [1,2,3,4, 1,2,3,4, 1,2,3,4, 1,2,3,4,
+                     1,2,3,4, 1,2,3,4, 1,2,3,4];
+  var map = {};
+  for(var i=0;i<28;i++){
+    map['Sem '+(i+1)] = months[i]+' · Sem '+weekInMonth[i];
+    map['Semana '+(i+1)] = months[i]+' · Sem '+weekInMonth[i];
+  }
+  return map;
+})();
+
+function semLabel(sem){
+  return SEM_LABELS[sem] || sem;
+}
+
 var KG='#1A3C28', KM='#1A5C3A', KT='#0D6B5E';
 var COL={bg:'#EBF5EE',accent:'#1A5C3A',light:'#B8DECA'};
 var MEX={bg:'#E0F5F2',accent:'#0D6B5E',light:'#A8E0DA'};
@@ -250,7 +274,7 @@ function KCard(p){
       h('span',{style:{fontSize:10,color:'#aaa'}},'⏱ '+item.esfuerzo+'h · '+item.fechaLimite)));
 }
 
-function Sel(p){return h('select',{value:p.value,onChange:function(e){p.onChange(e.target.value);},style:INP},p.opts.map(function(o){return h('option',{key:o},o);}));}
+function Sel(p){return h('select',{value:p.value,onChange:function(e){p.onChange(e.target.value);},style:INP},p.opts.map(function(o){return h('option',{key:o,value:o},p.labelFn?p.labelFn(o):o);}));}
 
   // Category multi-select picker component
   function CategoryPicker(p){
@@ -340,7 +364,7 @@ function NewModal(p){
       h('div',{style:{marginBottom:14}},h(FG,{label:'Solicitud / Entregable *'},h('input',{value:form.solicitud,onChange:function(e){set('solicitud',e.target.value);},placeholder:'Describe la solicitud...',style:INP}))),
       h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}},
         [['País','pais',PAISES],['Tipo','tipo',TIPOS],['Prioridad','prioridad',PRIORIDADES],['Semana','semana',SEMANAS]].map(function(x){
-          return h(FG,{key:x[1],label:x[0]},h(Sel,{value:form[x[1]],onChange:function(v){set(x[1],v);},opts:x[2]}));
+          return h(FG,{key:x[1],label:x[0]},h(Sel,{value:form[x[1]],onChange:function(v){set(x[1],v);},opts:x[2],labelFn:x[1]==='semana'?semLabel:null}));
         }),
         h(FG,{label:'Categoría(s)'},h(CategoryPicker,{value:form['categoria'],onChange:function(v){set('categoria',v);}})),
         h(FG,{label:'Champion(s)'},h(ChampionPicker,{value:form['champion'],onChange:function(v){set('champion',v);}})),
@@ -403,17 +427,18 @@ function App(){
 
   function sb(v){return {padding:'7px 16px',borderRadius:8,border:'none',cursor:'pointer',fontSize:12,fontWeight:700,background:view===v?KG:'#F0F0F0',color:view===v?'#fff':'#555'};}
   // Multi-select chips for semana filter
-  function multiChips(selected,setSelected,opts){
-    return h('div',{style:{display:'flex',gap:4,flexWrap:'wrap',maxWidth:600}},
+  function multiChips(selected,setSelected,opts,labelFn){
+    return h('div',{style:{display:'flex',gap:4,flexWrap:'wrap',maxWidth:800}},
       opts.map(function(o){
         var active=selected.indexOf(o)!==-1;
+        var label=labelFn?labelFn(o):o;
         return h('button',{key:o,onClick:function(){
           if(active){setSelected(selected.filter(function(s){return s!==o;}));}
           else{setSelected(selected.concat([o]));}
-        },style:{padding:'4px 10px',borderRadius:20,border:'1px solid',
+        },style:{padding:'4px 12px',borderRadius:20,border:'1px solid',
           borderColor:active?KG:'#DDD',background:active?KG:'#fff',
           color:active?'#fff':'#555',fontSize:10,fontWeight:600,cursor:'pointer',
-          transition:'all 0.15s'}},o);
+          transition:'all 0.15s',whiteSpace:'nowrap'}},label);
       }));
   }
   function chips(cur,setCur,opts){
@@ -726,7 +751,7 @@ function App(){
       // Row 2: semana filter (full width)
       semanasDisponibles.length>0&&h('div',{style:{padding:'6px 24px 10px',borderTop:'1px solid #F0F0F0',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}},
         h('div',{style:{fontSize:10,fontWeight:700,color:'#AAA',textTransform:'uppercase',whiteSpace:'nowrap'}},'Semana'),
-        multiChips(fsem,setFsem,semanasDisponibles),
+        multiChips(fsem,setFsem,semanasDisponibles,semLabel),
         fsem.length>0&&h('button',{onClick:function(){setFsem([]);},style:{fontSize:9,padding:'2px 9px',borderRadius:10,border:'1px solid #DDD',background:'#F5F5F5',color:'#888',cursor:'pointer',marginLeft:4}},'✕ Limpiar'))),
     // KPIs
     h('div',{style:{padding:'16px 24px',display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14}},
