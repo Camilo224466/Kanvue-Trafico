@@ -825,12 +825,90 @@ function App(){
             })));
     }
 
+    // ── Donut component ───────────────────────────────────────────────────────
+    function Donut(p){
+      var data=p.data.filter(function(d){return d.value>0;});
+      var total2=data.reduce(function(s,d){return s+d.value;},0);
+      if(!total2)return null;
+      var cum=0,R=46,cx=58,cy=58,st=16,ci=2*Math.PI*R;
+      var slices=data.map(function(d){
+        var pct=d.value/total2,o=ci*(1-cum-pct);cum+=pct;
+        return {label:d.label,value:d.value,color:d.color,o:o,dash:ci*pct};
+      });
+      // Fix float rounding so no gap shows
+      var used=slices.reduce(function(s,sl){return s+sl.dash;},0);
+      if(slices.length&&Math.abs(ci-used)>0.01) slices[slices.length-1].dash+=ci-used;
+
+      return h(Card,{pad:'16px 18px',gap:10},
+        h(CT,{label:p.title}),
+        h('div',{style:{display:'flex',alignItems:'center',gap:16}},
+          h('svg',{width:116,height:116,viewBox:'0 0 116 116',style:{flexShrink:0}},
+            slices.map(function(s,i){
+              return h('circle',{key:i,cx:cx,cy:cy,r:R,fill:'none',stroke:s.color,
+                strokeWidth:st,strokeDasharray:s.dash+' '+(ci-s.dash),
+                strokeDashoffset:s.o,
+                style:{transform:'rotate(-90deg)',transformOrigin:cx+'px '+cy+'px'}});
+            }),
+            h('text',{x:cx,y:cy-5,textAnchor:'middle',fontSize:20,fontWeight:800,
+              fill:JTX,fontFamily:'Roboto,sans-serif'},total2),
+            h('text',{x:cx,y:cy+12,textAnchor:'middle',fontSize:9,fill:JMT,
+              fontFamily:'Roboto,sans-serif'},'total')),
+          h('div',{style:{display:'flex',flexDirection:'column',gap:6,flex:1,minWidth:0}},
+            slices.map(function(s,i){
+              var pct=Math.round(s.value/total2*100);
+              return h('div',{key:i},
+                h('div',{style:{display:'flex',alignItems:'center',gap:5,marginBottom:2}},
+                  h('div',{style:{width:8,height:8,borderRadius:2,background:s.color,flexShrink:0}}),
+                  h('span',{style:{fontSize:10,color:JTX,flex:1,overflow:'hidden',
+                    textOverflow:'ellipsis',whiteSpace:'nowrap'}},s.label),
+                  h('span',{style:{fontSize:11,fontWeight:700,color:s.color}},s.value)),
+                h('div',{style:{height:3,background:'#DFE1E6',borderRadius:2}},
+                  h('div',{style:{width:pct+'%',height:'100%',background:s.color,borderRadius:2}})));
+            }))));
+    }
+
+    // ── Donut data ────────────────────────────────────────────────────────────
+    var donutEstado=[
+      {label:'Completado', value:completados, color:JGR},
+      {label:'En progreso',value:enProgreso,  color:JOR},
+      {label:'En revisión',value:enRevision,  color:JPU},
+      {label:'Pendiente',  value:pendientes,  color:JRD},
+    ];
+    var donutPais=[
+      {label:'🇨🇴 Colombia',value:filtered.filter(function(d){return d.pais==='Colombia';}).length,color:JBL},
+      {label:'🇲🇽 México',  value:filtered.filter(function(d){return d.pais==='México';}).length,  color:JPU},
+    ];
+    var donutPrio=[
+      {label:'Alta', value:filtered.filter(function(d){return d.prioridad==='Alta';}).length, color:JRD},
+      {label:'Media',value:filtered.filter(function(d){return d.prioridad==='Media';}).length,color:JOR},
+      {label:'Baja', value:filtered.filter(function(d){return d.prioridad==='Baja';}).length, color:JGR},
+    ];
+    var donutCat=(function(){
+      var cols=[JBL,JPU,JGR,JOR,JRD,JTL,'#FF7452'];
+      return CATEGORIAS.map(function(c,i){
+        return {label:c,value:filtered.filter(function(d){return d.categoria.indexOf(c)!==-1;}).length,color:cols[i%cols.length]};
+      }).filter(function(d){return d.value>0;});
+    })();
+    var donutTipo=(function(){
+      var cols=[JBL,JTL,JPU,JGR,JOR,JRD,'#FF7452','#00875A','#403294'];
+      return TIPOS.map(function(t,i){
+        return {label:t,value:filtered.filter(function(d){return d.tipo===t;}).length,color:cols[i%cols.length]};
+      }).filter(function(d){return d.value>0;});
+    })();
+
     // ── LAYOUT ────────────────────────────────────────────────────────────────
     return h('div',{style:{display:'flex',flexDirection:'column',gap:14,background:JBG,padding:'4px 0 24px'}},
       h(KpiStrip,null),
       h('div',{style:{display:'grid',gridTemplateColumns:'1.1fr 1fr',gap:14}},
         h(SprintProgress,null),
         h(ChampionTable,null)),
+      // Donuts row
+      h('div',{style:{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:14}},
+        h(Donut,{data:donutEstado, title:'Por estado'}),
+        h(Donut,{data:donutPais,   title:'Por país'}),
+        h(Donut,{data:donutPrio,   title:'Por prioridad'}),
+        h(Donut,{data:donutCat,    title:'Por categoría'}),
+        h(Donut,{data:donutTipo,   title:'Por tipo'})),
       h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:14}},
         h(CumplimientoChart,null),
         h(TipoChart,null),
