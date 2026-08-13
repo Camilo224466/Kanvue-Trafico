@@ -387,6 +387,7 @@ function App(){
   var [search,setSearch]=useState('');
   var [sel,setSel]=useState(null);
   var [showNew,setShowNew]=useState(false);
+  var [donutSel,setDonutSel]=useState(null);
   var [user,setUser]=useState(null);
 
   function showToast(msg,type){setToast({msg:msg,type:type||'ok'});setTimeout(function(){setToast(null);},3500);}
@@ -821,9 +822,105 @@ function App(){
             })));
     }
 
+    // ── Donas de distribución ────────────────────────────────────────────────
+    var DR=44,DC=54,DW=15;
+    function dpt(a){return [DC+DR*Math.cos(a),DC+DR*Math.sin(a)];}
+    function darc(f,t){
+      var a0=f*2*Math.PI-Math.PI/2, a1=t*2*Math.PI-Math.PI/2;
+      var p0=dpt(a0), p1=dpt(a1), big=(t-f)>0.5?1:0;
+      return 'M '+p0[0].toFixed(3)+' '+p0[1].toFixed(3)+
+             ' A '+DR+' '+DR+' 0 '+big+' 1 '+p1[0].toFixed(3)+' '+p1[1].toFixed(3);
+    }
+    function Donut(p){
+      var data=p.data.filter(function(d){return d.value>0;});
+      var tot=data.reduce(function(s,d){return s+d.value;},0);
+      if(!tot) return h(Card,{pad:'14px 16px',gap:10},h(CT,{label:p.title}),
+        h('div',{style:{fontSize:11,color:JMT,textAlign:'center',padding:'26px 0'}},'Sin datos'));
+      var acc=0, fr=data.map(function(x){var f=acc/tot;acc+=x.value;return [f,acc/tot];});
+      fr[fr.length-1][1]=1;
+      var arcs = data.length===1
+        ? [h('circle',{key:0,cx:DC,cy:DC,r:DR,fill:'none',stroke:data[0].color,strokeWidth:DW})]
+        : data.map(function(x,i){
+            var act=donutSel&&donutSel.g===p.title, on=act&&donutSel.i===i;
+            return h('path',{key:i,d:darc(fr[i][0],fr[i][1]),fill:'none',stroke:x.color,
+              strokeWidth:act?(on?19:11):DW,
+              style:{cursor:'pointer',opacity:(act&&!on)?0.35:1,transition:'stroke-width .12s,opacity .12s'},
+              onMouseEnter:function(){setDonutSel({g:p.title,i:i});},
+              onMouseLeave:function(){setDonutSel(null);}});
+          });
+      return h(Card,{pad:'14px 16px',gap:8},
+        h(CT,{label:p.title}),
+        h('div',{style:{display:'flex',justifyContent:'center',marginBottom:6}},
+          h('svg',{width:108,height:108,viewBox:'0 0 108 108'},
+            arcs,
+            h('text',{x:DC,y:DC-1,textAnchor:'middle',fontSize:21,fontWeight:700,fill:JTX,fontFamily:'Roboto,sans-serif'},tot),
+            h('text',{x:DC,y:DC+13,textAnchor:'middle',fontSize:8,fill:JMT,fontFamily:'Roboto,sans-serif'},p.unit||'TAREAS'))),
+        h('div',{style:{display:'flex',flexDirection:'column',gap:2}},
+          data.map(function(x,i){
+            return h('div',{key:i,
+              onMouseEnter:function(){setDonutSel({g:p.title,i:i});},
+              onMouseLeave:function(){setDonutSel(null);},
+              style:{display:'flex',alignItems:'center',gap:5,cursor:'pointer',padding:'1px 0'}},
+              h('div',{style:{width:8,height:8,borderRadius:2,background:x.color,flexShrink:0}}),
+              h('span',{style:{fontSize:11,color:JTX,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},x.label),
+              h('span',{style:{fontSize:11,fontWeight:700,color:x.color}},x.value),
+              h('span',{style:{fontSize:10,color:JMT,minWidth:26,textAlign:'right'}},Math.round(x.value/tot*100)+'%'));
+          })));
+    }
+
+    function DonutDetalle(){
+      var txt='Pasa el cursor sobre un segmento para ver el detalle.', dot=null;
+      if(donutSel){
+        var set=donutSets.filter(function(s){return s.title===donutSel.g;})[0];
+        if(set){
+          var dd=set.data.filter(function(d){return d.value>0;});
+          var x=dd[donutSel.i];
+          if(x){
+            var tt=dd.reduce(function(s,d){return s+d.value;},0);
+            dot=x.color;
+            txt=set.title+' · '+x.label+' — '+x.value+' de '+tt+' ('+Math.round(x.value/tt*100)+'%)';
+          }
+        }
+      }
+      return h(Card,{pad:'12px 16px',gap:8},
+        h(CT,{label:'Detalle'}),
+        h('div',{style:{fontSize:13,color:JTX,display:'flex',alignItems:'center',gap:7,minHeight:18}},
+          dot&&h('span',{style:{width:9,height:9,borderRadius:2,background:dot,flexShrink:0}}),
+          h('span',null,txt)));
+    }
+
+    var CAT_C=[JBL,JPU,JGR,JOR,JRD,JTL,'#4C9AFF'];
+    var donutSets=[
+      {title:'Estado',unit:'TAREAS',data:[
+        {label:'Completado',value:completados,color:JGR},
+        {label:'En progreso',value:enProgreso,color:JOR},
+        {label:'En revisión',value:enRevision,color:JPU},
+        {label:'Pendiente',value:pendientes,color:JRD}]},
+      {title:'País',unit:'TAREAS',data:PAISES.map(function(pa,i){
+        return {label:pa,value:filtered.filter(function(d){return d.pais===pa;}).length,
+                color:i===0?JBL:JPU};})},
+      {title:'Prioridad',unit:'TAREAS',data:[
+        {label:'Alta',value:filtered.filter(function(d){return d.prioridad==='Alta';}).length,color:JRD},
+        {label:'Media',value:filtered.filter(function(d){return d.prioridad==='Media';}).length,color:JOR},
+        {label:'Baja',value:filtered.filter(function(d){return d.prioridad==='Baja';}).length,color:JGR}]},
+      {title:'Categoría',unit:'TAGS',data:CATEGORIAS.map(function(ca,i){
+        return {label:ca,value:filtered.filter(function(d){return d.categoria.indexOf(ca)!==-1;}).length,
+                color:CAT_C[i%CAT_C.length]};})
+        .filter(function(d){return d.value>0;}).sort(function(a,b){return b.value-a.value;})},
+      {title:'Tipo',unit:'TAREAS',data:TIPOS.map(function(ti,i){
+        return {label:ti,value:filtered.filter(function(d){return d.tipo===ti;}).length,
+                color:CAT_C[i%CAT_C.length]};})
+        .filter(function(d){return d.value>0;}).sort(function(a,b){return b.value-a.value;})}
+    ];
+
     // ── LAYOUT ────────────────────────────────────────────────────────────────
     return h('div',{style:{display:'flex',flexDirection:'column',gap:14,background:JBG,padding:'4px 0 24px'}},
       h(KpiStrip,null),
+      h('div',{style:{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12}},
+        donutSets.map(function(s,i){
+          return h(Donut,{key:i,title:s.title,unit:s.unit,data:s.data});
+        })),
+      h(DonutDetalle,null),
       h('div',{style:{display:'grid',gridTemplateColumns:'1.1fr 1fr',gap:14}},
         h(SprintProgress,null),
         h(ChampionTable,null)),
