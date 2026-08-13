@@ -640,6 +640,60 @@ function App(){
     }
 
     // ── Sprint progress ───────────────────────────────────────────────────────
+    // ── Vencimientos (tareas abiertas vs fecha límite) ───────────────────────
+    function parseLim(s){
+      if(!s) return null;
+      var t=String(s).trim(), m;
+      if((m=t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)))
+        return new Date(+m[1],+m[2]-1,+m[3]);
+      if((m=t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)))
+        return new Date(+m[3],+m[2]-1,+m[1]);
+      var d=new Date(t); return isNaN(d)?null:d;
+    }
+    var _hoy=new Date(); _hoy.setHours(0,0,0,0);
+    var abiertas=filtered.filter(function(d){return d.estado!=='Completado';});
+    var vVencidas=[], vProximas=[], vTiempo=0;
+    abiertas.forEach(function(d){
+      var lim=parseLim(d.fechaLimite);
+      if(!lim){ vTiempo++; return; }
+      var dias=Math.round((lim-_hoy)/86400000);
+      if(dias<0) vVencidas.push({d:d,dias:-dias});
+      else if(dias<=7) vProximas.push({d:d,dias:dias});
+      else vTiempo++;
+    });
+    vVencidas.sort(function(a,b){return b.dias-a.dias;});
+
+    function VencBlock(){
+      var cajas=[
+        {n:vVencidas.length,l:'vencidas',      bg:'#FFEBE6',fg:'#BF2600'},
+        {n:vProximas.length,l:'vencen ≤7 días',bg:'#FFF7E6',fg:'#974F0C'},
+        {n:vTiempo,         l:'a tiempo',      bg:'#E3FCEF',fg:'#006644'}
+      ];
+      return h('div',{style:{paddingTop:12,borderTop:'1px solid '+JBR}},
+        h('div',{style:{fontSize:11,color:JMT,marginBottom:10}},
+          'Vencimientos · '+abiertas.length+' tarea'+(abiertas.length===1?'':'s')+' abierta'+(abiertas.length===1?'':'s')),
+        h('div',{style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginBottom:12}},
+          cajas.map(function(x,i){
+            return h('div',{key:i,style:{background:x.bg,borderRadius:6,padding:'10px 12px'}},
+              h('div',{style:{fontSize:26,fontWeight:800,color:x.fg,lineHeight:1}},x.n),
+              h('div',{style:{fontSize:10,color:x.fg,marginTop:2}},x.l));
+          })),
+        vVencidas.length>0&&h('div',null,
+          h('div',{style:{fontSize:10,color:JMT,marginBottom:6}},'Más atrasadas'),
+          h('div',{style:{display:'flex',flexDirection:'column',gap:5}},
+            vVencidas.slice(0,4).map(function(v,i){
+              var ch=v.d.champion.split('/')[0].trim().split(' ');
+              var corto=ch[0]+(ch[1]?' '+ch[1].charAt(0)+'.':'');
+              return h('div',{key:i,style:{display:'flex',alignItems:'center',gap:8,fontSize:11}},
+                h('span',{style:{background:'#FFEBE6',color:'#BF2600',borderRadius:3,padding:'1px 6px',
+                  fontWeight:700,minWidth:32,textAlign:'center',flexShrink:0}},v.dias+'d'),
+                h('span',{style:{color:JTX,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},v.d.solicitud),
+                h('span',{style:{color:JMT,flexShrink:0}},corto));
+            }))),
+        vVencidas.length===0&&h('div',{style:{fontSize:11,color:JGR,fontWeight:600,padding:'4px 0'}},
+          '✓ Sin tareas vencidas'));
+    }
+
     function SprintProgress(){
       var segs=[
         {label:'Completado',value:completados,color:JGR},
@@ -668,7 +722,8 @@ function App(){
             h('span',{style:{fontSize:11,color:JMT}},'Progreso de horas'),
             h('span',{style:{fontSize:11,fontWeight:700,color:JTX}},hrsHechas+'h / '+hrsTotal+'h ('+pctHrs+'%)')),
           h('div',{style:{height:6,background:'#DFE1E6',borderRadius:3,overflow:'hidden'}},
-            h('div',{style:{width:pctHrs+'%',height:'100%',background:pctHrs>75?JGR:pctHrs>40?JOR:JBL,borderRadius:3}}))));
+            h('div',{style:{width:pctHrs+'%',height:'100%',background:pctHrs>75?JGR:pctHrs>40?JOR:JBL,borderRadius:3}}))),
+        h(VencBlock,null));
     }
 
     // ── Champion table ────────────────────────────────────────────────────────
