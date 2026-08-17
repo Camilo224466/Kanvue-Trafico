@@ -88,6 +88,16 @@ body{background:#F4F6F8;font-family:'Aptos Narrow',Aptos,'Segoe UI',Arial,sans-s
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px}
 select,input,textarea{font-family:inherit}
+#rep{display:none}
+@media print{
+  @page{size:A4 landscape;margin:10mm}
+  body{background:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  #root>div>div:not(#rep){display:none!important}
+  #rep{display:block!important}
+  .pg{page-break-after:always;break-after:page}
+  .pg:last-child{page-break-after:auto;break-after:auto}
+  .nb{page-break-inside:avoid;break-inside:avoid}
+}
 </style>
 </head>
 <body>
@@ -394,6 +404,182 @@ function SinAcceso(){
       'Esta vista está disponible solo para administradores. Si necesitas acceso, escribe a camilo.rios@retailatam.com.'));
 }
 
+function Reporte(p){
+  var INK='#0A0E14',NAV='#0F1E33',BL1='#1B4B7F',BL2='#2E6BA8',BL3='#6D9AC4',BL4='#B6CDE2';
+  var RD='#A81E2D',GRN='#1E6B4F',ORA='#B8721A';
+  var G1='#3A4553',G2='#66717F',G3='#9BA5B1',G4='#DDE2E8',G5='#F4F6F8';
+  var d=p.data, f=p.filtros, hoy=new Date();
+  var MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto',
+             'septiembre','octubre','noviembre','diciembre'];
+  var fechaTxt=hoy.getDate()+' de '+MESES[hoy.getMonth()]+' de '+hoy.getFullYear();
+
+  function Sec(t){return h('div',{style:{fontSize:9,fontWeight:700,color:G2,
+    textTransform:'uppercase',letterSpacing:'1px',borderBottom:'1px solid '+G4,
+    paddingBottom:5,marginBottom:9}},t);}
+
+  // ---- portada ----
+  var portada=h('div',{className:'pg',style:{height:'190mm',display:'flex',
+    flexDirection:'column',justifyContent:'space-between',padding:'4mm 0'}},
+    h('div',null,
+      h('img',{src:'data:image/png;base64,'+LOGO_B64,style:{height:34,marginBottom:38}}),
+      h('div',{style:{width:52,height:3,background:RD,marginBottom:22}}),
+      h('div',{style:{fontSize:34,fontWeight:700,color:INK,lineHeight:1.15,marginBottom:10}},
+        'Reporte de Tráfico'),
+      h('div',{style:{fontSize:19,color:BL1,fontWeight:600,marginBottom:26}},
+        'Kenvue · Category Management'),
+      h('div',{style:{fontSize:12,color:G2,lineHeight:1.9}},
+        h('div',null,'Colombia & México'),
+        h('div',null,'Generado el '+fechaTxt),
+        f&&h('div',{style:{marginTop:8,color:G3}},f))),
+    h('div',{style:{borderTop:'1px solid '+G4,paddingTop:12,display:'flex',
+      justifyContent:'space-between',fontSize:9,color:G3}},
+      h('span',null,'RETAILATAM Business Solutions'),
+      h('span',null,'Documento interno')));
+
+  // ---- KPIs ----
+  var kpis=[
+    {l:'Total solicitudes',v:d.total,c:INK},
+    {l:'Completadas',v:d.completados+' ('+d.pctDone+'%)',c:GRN},
+    {l:'En progreso',v:d.enProgreso,c:BL2},
+    {l:'En revisión',v:d.enRevision,c:BL3},
+    {l:'Pendientes',v:d.pendientes,c:G2},
+    {l:'Horas estimadas',v:d.hrsTotal+'h',c:BL1}];
+
+  var segs=[{l:'Completado',v:d.completados,c:GRN},{l:'En progreso',v:d.enProgreso,c:BL2},
+            {l:'En revisión',v:d.enRevision,c:BL3},{l:'Pendiente',v:d.pendientes,c:G3}]
+           .filter(function(s){return s.v>0;});
+
+  var resumen=h('div',{className:'pg'},
+    h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',
+      borderBottom:'2px solid '+INK,paddingBottom:7,marginBottom:14}},
+      h('div',{style:{fontSize:15,fontWeight:700,color:INK}},'Resumen ejecutivo'),
+      h('img',{src:'data:image/png;base64,'+LOGO_B64,style:{height:17}})),
+
+    h('div',{className:'nb',style:{display:'grid',gridTemplateColumns:'repeat(6,1fr)',
+      gap:1,background:G4,border:'1px solid '+G4,marginBottom:14}},
+      kpis.map(function(k,i){
+        return h('div',{key:i,style:{background:'#fff',padding:'9px 11px'}},
+          h('div',{style:{fontSize:7.5,color:G2,textTransform:'uppercase',
+            letterSpacing:'.6px',marginBottom:4}},k.l),
+          h('div',{style:{fontSize:19,fontWeight:700,color:k.c,lineHeight:1}},k.v));
+      })),
+
+    h('div',{className:'nb',style:{marginBottom:14}},
+      Sec('Estado del sprint'),
+      h('div',{style:{display:'flex',height:9,marginBottom:7}},
+        segs.map(function(s,i){
+          return h('div',{key:i,style:{width:(d.total?s.v/d.total*100:0)+'%',background:s.c}});
+        })),
+      h('div',{style:{display:'flex',gap:16,flexWrap:'wrap'}},
+        segs.map(function(s,i){
+          return h('span',{key:i,style:{fontSize:9.5,color:G1}},
+            h('span',{style:{display:'inline-block',width:7,height:7,background:s.c,marginRight:5}}),
+            s.l+' ',h('b',null,s.v),' ('+(d.total?Math.round(s.v/d.total*100):0)+'%)');
+        }))),
+
+    h('div',{className:'nb',style:{marginBottom:14}},
+      Sec('Vencimientos · '+d.abiertas+' tareas abiertas'),
+      h('div',{style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:1,
+        background:G4,border:'1px solid '+G4,marginBottom:d.vencidas.length?9:0}},
+        [[d.vencidas.length,'VENCIDAS',RD],[d.proximas,'≤ 7 DÍAS',ORA],[d.aTiempo,'A TIEMPO',GRN]]
+        .map(function(k,i){
+          return h('div',{key:i,style:{background:'#fff',padding:'8px 11px',
+            borderLeft:'3px solid '+k[2]}},
+            h('div',{style:{fontSize:17,fontWeight:700,color:k[2],lineHeight:1}},k[0]),
+            h('div',{style:{fontSize:7.5,color:G2,letterSpacing:'.5px',marginTop:2}},k[1]));
+        })),
+      d.vencidas.length>0&&h('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:9}},
+        h('thead',null,h('tr',null,
+          ['Días','Solicitud','Champion','País'].map(function(t,i){
+            return h('th',{key:i,style:{textAlign:i===0?'center':'left',padding:'4px 7px',
+              background:G5,color:G2,fontSize:7.5,textTransform:'uppercase',
+              letterSpacing:'.5px',borderBottom:'1px solid '+G4,
+              width:i===0?'42px':i===2?'130px':i===3?'62px':'auto'}},t);
+          }))),
+        h('tbody',null,d.vencidas.slice(0,8).map(function(v,i){
+          return h('tr',{key:i},
+            h('td',{style:{textAlign:'center',padding:'4px 7px',borderBottom:'1px solid '+G4,
+              color:RD,fontWeight:700}},v.dias),
+            h('td',{style:{padding:'4px 7px',borderBottom:'1px solid '+G4,color:INK}},v.d.solicitud),
+            h('td',{style:{padding:'4px 7px',borderBottom:'1px solid '+G4,color:G1}},
+              v.d.champion.split('/')[0].trim()),
+            h('td',{style:{padding:'4px 7px',borderBottom:'1px solid '+G4,color:G1}},v.d.pais));
+        })))),
+
+    h('div',{className:'nb'},
+      Sec('Carga por champion'),
+      h('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:9.5}},
+        h('thead',null,h('tr',null,
+          ['Champion','Tareas','Horas','Distribución'].map(function(t,i){
+            return h('th',{key:i,style:{textAlign:i>0&&i<3?'center':'left',padding:'4px 7px',
+              background:G5,color:G2,fontSize:7.5,textTransform:'uppercase',
+              letterSpacing:'.5px',borderBottom:'1px solid '+G4,
+              width:i===1||i===2?'60px':i===3?'34%':'auto'}},t);
+          }))),
+        h('tbody',null,d.champs.map(function(x,i){
+          var pct=d.mxHrs?Math.round(x.hrs/d.mxHrs*100):0;
+          return h('tr',{key:i},
+            h('td',{style:{padding:'4px 7px',borderBottom:'1px solid '+G4,color:INK,fontWeight:600}},x.full),
+            h('td',{style:{textAlign:'center',padding:'4px 7px',borderBottom:'1px solid '+G4,color:G1}},x.sols),
+            h('td',{style:{textAlign:'center',padding:'4px 7px',borderBottom:'1px solid '+G4,
+              color:INK,fontWeight:700}},x.hrs+'h'),
+            h('td',{style:{padding:'4px 7px',borderBottom:'1px solid '+G4}},
+              h('div',{style:{height:6,background:G4}},
+                h('div',{style:{width:pct+'%',height:'100%',background:BL2}}))));
+        })))));
+
+  // ---- distribuciones ----
+  var R=34,C=42,W=11;
+  function pt(a){return [C+R*Math.cos(a),C+R*Math.sin(a)];}
+  function arcp(fr,to){
+    var a0=fr*2*Math.PI-Math.PI/2,a1=to*2*Math.PI-Math.PI/2;
+    var A=pt(a0),B=pt(a1),big=(to-fr)>0.5?1:0;
+    return 'M '+A[0].toFixed(2)+' '+A[1].toFixed(2)+' A '+R+' '+R+' 0 '+big+' 1 '+B[0].toFixed(2)+' '+B[1].toFixed(2);
+  }
+  function MiniDonut(q){
+    var dd=q.data.filter(function(x){return x.value>0;});
+    var tt=dd.reduce(function(s,x){return s+x.value;},0);
+    if(!tt) return null;
+    var acc=0, fr=dd.map(function(x){var a=acc/tt;acc+=x.value;return [a,acc/tt];});
+    fr[fr.length-1][1]=1;
+    return h('div',{className:'nb',style:{border:'1px solid '+G4,padding:'9px 11px'}},
+      h('div',{style:{fontSize:7.5,fontWeight:700,color:G2,textTransform:'uppercase',
+        letterSpacing:'.6px',marginBottom:7}},q.title),
+      h('div',{style:{display:'flex',alignItems:'center',gap:11}},
+        h('svg',{width:84,height:84,viewBox:'0 0 84 84',style:{flexShrink:0}},
+          dd.map(function(x,i){
+            return h('path',{key:i,d:arcp(fr[i][0],fr[i][1]),fill:'none',
+              stroke:x.color,strokeWidth:W});
+          }),
+          h('text',{x:C,y:C+1,textAnchor:'middle',fontSize:16,fontWeight:700,fill:INK},tt),
+          h('text',{x:C,y:C+11,textAnchor:'middle',fontSize:5.5,fill:G2},q.unit||'TAREAS')),
+        h('div',{style:{flex:1,display:'flex',flexDirection:'column',gap:2}},
+          dd.map(function(x,i){
+            return h('div',{key:i,style:{display:'flex',alignItems:'center',gap:5}},
+              h('span',{style:{width:7,height:7,background:x.color,flexShrink:0}}),
+              h('span',{style:{fontSize:8.5,color:G1,flex:1,overflow:'hidden',
+                textOverflow:'ellipsis',whiteSpace:'nowrap'}},x.label),
+              h('span',{style:{fontSize:8.5,fontWeight:700,color:INK}},x.value),
+              h('span',{style:{fontSize:7.5,color:G3,minWidth:22,textAlign:'right'}},
+                Math.round(x.value/tt*100)+'%'));
+          }))));
+  }
+
+  var distrib=h('div',{className:'pg'},
+    h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',
+      borderBottom:'2px solid '+INK,paddingBottom:7,marginBottom:14}},
+      h('div',{style:{fontSize:15,fontWeight:700,color:INK}},'Distribución'),
+      h('img',{src:'data:image/png;base64,'+LOGO_B64,style:{height:17}})),
+    h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:9}},
+      d.donuts.map(function(s,i){
+        return h(MiniDonut,{key:i,title:s.title,unit:s.unit,data:s.data});
+      })));
+
+  return h('div',{id:'rep',style:{background:'#fff',color:INK,
+    fontFamily:'"Aptos Narrow",Aptos,"Segoe UI",Arial,sans-serif'}},
+    portada, resumen, distrib);
+}
+
 // ── Main App ──────────────────────────────────────────────────────────────────
 function App(){
   var [data,setData]=useState([]);
@@ -492,6 +678,89 @@ function App(){
 
   // ── Kanban columns ──────────────────────────────────────────────────────────
 // ── Calendario ─────────────────────────────────────────────────────────────
+  // ── Datos para el reporte PDF ──────────────────────────────────────────────
+  function repData(){
+    var BL1='#1B4B7F',BL2='#2E6BA8',BL3='#6D9AC4';
+    var RD='#A81E2D',GRN='#1E6B4F',ORA='#B8721A',G2='#66717F',G3='#9BA5B1';
+    function sh(field,hrs,name){
+      var ps=field.split('/').map(function(s){return s.trim();}).filter(Boolean);
+      if(!ps.length)return 0;
+      return ps.indexOf(name)!==-1?hrs/ps.length:0;
+    }
+    function pL(s){
+      if(!s)return null;
+      var t=String(s).trim(),m;
+      if((m=t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)))return new Date(+m[1],+m[2]-1,+m[3]);
+      if((m=t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)))return new Date(+m[3],+m[2]-1,+m[1]);
+      var x=new Date(t);return isNaN(x)?null:x;
+    }
+    var hoy=new Date();hoy.setHours(0,0,0,0);
+    var tot=filtered.length;
+    var comp=filtered.filter(function(x){return x.estado==='Completado';}).length;
+    var prog=filtered.filter(function(x){return x.estado==='En progreso';}).length;
+    var rev =filtered.filter(function(x){return x.estado==='En revisión';}).length;
+    var pend=filtered.filter(function(x){return x.estado==='Pendiente';}).length;
+    var abiertas=filtered.filter(function(x){return x.estado!=='Completado';});
+    var venc=[],prox=0,atmp=0;
+    abiertas.forEach(function(x){
+      var L=pL(x.fechaLimite);
+      if(!L){atmp++;return;}
+      L.setHours(0,0,0,0);
+      var dd=Math.round((L-hoy)/86400000);
+      if(dd<0)venc.push({d:x,dias:-dd}); else if(dd<=7)prox++; else atmp++;
+    });
+    venc.sort(function(a,b){return b.dias-a.dias;});
+    var champs=CHAMPIONS.map(function(n){
+      return {full:n,
+        hrs:Math.round(filtered.reduce(function(s,x){return s+sh(x.champion,x.esfuerzo,n);},0)*10)/10,
+        sols:filtered.filter(function(x){return x.champion.indexOf(n)!==-1;}).length};
+    }).filter(function(x){return x.hrs>0||x.sols>0;}).sort(function(a,b){return b.hrs-a.hrs;});
+    var CC=['#0F1E33','#1B4B7F','#2E6BA8','#6D9AC4','#B6CDE2','#66717F','#9BA5B1'];
+    return {
+      total:tot,completados:comp,enProgreso:prog,enRevision:rev,pendientes:pend,
+      pctDone:tot?Math.round(comp/tot*100):0,
+      hrsTotal:Math.round(filtered.reduce(function(s,x){return s+x.esfuerzo;},0)),
+      abiertas:abiertas.length,vencidas:venc,proximas:prox,aTiempo:atmp,
+      champs:champs,
+      mxHrs:Math.max.apply(null,champs.map(function(x){return x.hrs;}).concat([1])),
+      donuts:[
+        {title:'Estado',unit:'TAREAS',data:[
+          {label:'Completado',value:comp,color:GRN},{label:'En progreso',value:prog,color:BL2},
+          {label:'En revisión',value:rev,color:BL3},{label:'Pendiente',value:pend,color:G3}]},
+        {title:'País',unit:'TAREAS',data:PAISES.map(function(pa,i){
+          return {label:pa,value:filtered.filter(function(x){return x.pais===pa;}).length,
+                  color:i===0?BL1:RD};})},
+        {title:'Prioridad',unit:'TAREAS',data:[
+          {label:'Alta',value:filtered.filter(function(x){return x.prioridad==='Alta';}).length,color:RD},
+          {label:'Media',value:filtered.filter(function(x){return x.prioridad==='Media';}).length,color:ORA},
+          {label:'Baja',value:filtered.filter(function(x){return x.prioridad==='Baja';}).length,color:G2}]},
+        {title:'Categoría',unit:'TAGS',data:CATEGORIAS.map(function(ca,i){
+          return {label:ca,value:filtered.filter(function(x){return x.categoria.indexOf(ca)!==-1;}).length,
+                  color:CC[i%CC.length]};}).filter(function(x){return x.value>0;})
+          .sort(function(a,b){return b.value-a.value;})},
+        {title:'Tipo',unit:'TAREAS',data:TIPOS.map(function(ti,i){
+          return {label:ti,value:filtered.filter(function(x){return x.tipo===ti;}).length,
+                  color:CC[i%CC.length]};}).filter(function(x){return x.value>0;})
+          .sort(function(a,b){return b.value-a.value;})},
+        {title:'Semana',unit:'TAREAS',data:(function(){
+          var ws=filtered.reduce(function(a,x){if(x.semana&&a.indexOf(x.semana)===-1)a.push(x.semana);return a;},[])
+            .sort(function(a,b){return (parseInt(a.replace(/[^0-9]/g,''))||0)-(parseInt(b.replace(/[^0-9]/g,''))||0);});
+          return ws.map(function(w,i){
+            return {label:semLabel(w),value:filtered.filter(function(x){return x.semana===w;}).length,
+                    color:CC[i%CC.length]};});
+        })()}
+      ]};
+  }
+  function repFiltros(){
+    var f=[];
+    if(fp!=='Todos')f.push('País: '+fp);
+    if(fc!=='Todos')f.push('Champion: '+fc);
+    if(fpr!=='Todos')f.push('Prioridad: '+fpr);
+    if(fsem.length)f.push('Semana: '+fsem.map(semLabel).join(', '));
+    if(search)f.push('Búsqueda: "'+search+'"');
+    return f.length?'Filtros aplicados — '+f.join('  ·  '):'Sin filtros · todas las solicitudes';
+  }
+
   function calendario(){
     var JBG='#F4F6F8',JCARD='#FFFFFF',JBR='#DDE2E8',JTX='#0A0E14',JMT='#66717F';
     var JBL='#1B4B7F',JGR='#1E6B4F',JOR='#B8721A',JRD='#A81E2D',JPU='#2E6BA8';
@@ -1193,6 +1462,7 @@ function App(){
         isAdmin&&h('button',{style:sb('dashboard'),onClick:function(){setView('dashboard');}},'📊 Dashboard'),
         h('div',{style:{width:1,height:24,background:'rgba(255,255,255,.25)',margin:'0 4px'}}),
         h('button',{onClick:reload,style:{padding:'7px 14px',borderRadius:8,background:'rgba(255,255,255,.1)',color:'#fff',border:'1px solid rgba(255,255,255,.25)',cursor:'pointer',fontSize:12,fontWeight:600}},'🔄 Sincronizar'),
+        isAdmin&&h('button',{onClick:function(){window.print();},style:{padding:'7px 14px',borderRadius:8,background:'rgba(255,255,255,.1)',color:'#fff',border:'1px solid rgba(255,255,255,.25)',cursor:'pointer',fontSize:12,fontWeight:600}},'🖨 Exportar PDF'),
         h('button',{onClick:function(){setShowNew(true);},style:{padding:'7px 16px',borderRadius:8,background:'#1B4B7F',color:'#fff',border:'none',cursor:'pointer',fontSize:12,fontWeight:700}},'+ Nueva'))),
     // Filters - two rows
     h('div',{style:{background:'#fff',borderBottom:'1px solid #DDE2E8'}},
@@ -1225,6 +1495,7 @@ function App(){
     sel&&h(EditModal,{item:sel,onClose:function(){setSel(null);},onSave:updateItem}),
     showNew&&h(NewModal,{onClose:function(){setShowNew(false);},onAdd:addItem,nextId:nextId}),
     // Toast
+    isAdmin&&h(Reporte,{data:repData(),filtros:repFiltros()}),
     toast&&h('div',{style:{position:'fixed',bottom:24,right:24,background:toast.type==='err'?'#A81E2D':KG,color:'#fff',padding:'12px 20px',borderRadius:10,fontSize:13,fontWeight:600,boxShadow:'0 4px 16px rgba(0,0,0,.2)',zIndex:2000,animation:'fi 0.2s',maxWidth:360}},toast.msg));
 }
 
