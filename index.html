@@ -1066,6 +1066,79 @@ function App(){
       return parts.indexOf(name)!==-1?hrs/parts.length:0;
     }
 
+    // ── Reparto de horas por semana (días hábiles, solo tareas abiertas) ──────
+    function pF(s){
+      if(!s) return null;
+      var t=String(s).trim(), m;
+      if((m=t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return new Date(+m[1],+m[2]-1,+m[3]);
+      if((m=t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/))) return new Date(+m[3],+m[2]-1,+m[1]);
+      var d=new Date(t); return isNaN(d)?null:d;
+    }
+    // Lunes de la semana calendario a la que pertenece una fecha
+    function lunesDe(d){
+      var x=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+      var dow=(x.getDay()+6)%7; // 0=lunes
+      x.setDate(x.getDate()-dow);
+      return x;
+    }
+    function esHabil(d){ var w=d.getDay(); return w>=1&&w<=5; }
+    function keySemana(lunes){ return lunes.getFullYear()+'-'+(lunes.getMonth()+1)+'-'+lunes.getDate(); }
+    function labelSemanaCal(lunes){
+      var MN=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+      var dom=new Date(lunes); dom.setDate(dom.getDate()+6);
+      return lunes.getDate()+' '+MN[lunes.getMonth()]+' – '+dom.getDate()+' '+MN[dom.getMonth()];
+    }
+
+    // Devuelve [{key, label, horas}] para UNA tarea
+    function horasPorSemana(d){
+      var comp = d.estado==='Completado';
+      var fSol = pF(d.fecha), fLim = pF(d.fechaLimite);
+      // Completada: todo el esfuerzo cae en la semana de la fecha límite (o solicitud si no hay límite)
+      if(comp){
+        var base = fLim || fSol;
+        if(!base) return [];
+        var l=lunesDe(base);
+        return [{key:keySemana(l),label:labelSemanaCal(l),horas:d.esfuerzo}];
+      }
+      // Abierta: repartir por días hábiles entre Solicitud y Límite
+      if(!fSol || !fLim || fLim<fSol){
+        var l2=lunesDe(fLim||fSol||new Date());
+        return l2?[{key:keySemana(l2),label:labelSemanaCal(l2),horas:d.esfuerzo}]:[];
+      }
+      var dias=[], cur=new Date(fSol);
+      while(cur<=fLim){
+        if(esHabil(cur)) dias.push(new Date(cur));
+        cur.setDate(cur.getDate()+1);
+      }
+      if(!dias.length){
+        var l3=lunesDe(fLim);
+        return [{key:keySemana(l3),label:labelSemanaCal(l3),horas:d.esfuerzo}];
+      }
+      var porDia = d.esfuerzo/dias.length;
+      var acc={};
+      dias.forEach(function(dd){
+        var l=lunesDe(dd), k=keySemana(l);
+        if(!acc[k]) acc[k]={key:k,label:labelSemanaCal(l),lunes:l,horas:0};
+        acc[k].horas += porDia;
+      });
+      return Object.keys(acc).map(function(k){return acc[k];})
+        .sort(function(a,b){return a.lunes-b.lunes;});
+    }
+
+    // Agregado para TODAS las tareas filtradas → [{key,label,horas}]
+    function horasPorSemanaTotal(rows){
+      var acc={};
+      rows.forEach(function(d){
+        horasPorSemana(d).forEach(function(s){
+          if(!acc[s.key]) acc[s.key]={key:s.key,label:s.label,horas:0,lunes:s.lunes};
+          acc[s.key].horas += s.horas;
+        });
+      });
+      return Object.keys(acc).map(function(k){return acc[k];})
+        .sort(function(a,b){return a.lunes-b.lunes;});
+    }
+
+
     // Jira palette
     var JBG='#F4F6F8',JCARD='#FFFFFF',JBR='#DDE2E8',JTX='#0A0E14',JMT='#66717F';
     var JBL='#1B4B7F',JLB='#6D9AC4',JGR='#1E6B4F',JOR='#B8721A',JRD='#A81E2D',JPU='#2E6BA8',JTL='#16304F';
@@ -1337,6 +1410,37 @@ function App(){
           })));
     }
 
+    // ── Horas por semana (repartidas por días hábiles) ────────────────────────
+    var horasSemanaData = horasPorSemanaTotal(filtered);
+    function HorasSemanaChart(){
+      if(!horasSemanaData.length)return null;
+      var W=520,H=150,PL=36,PR=12,PT=16,PB=34;
+      var cW=W-PL-PR,cH=H-PT-PB;
+      var n=horasSemanaData.length;
+      var barW=Math.min(32,cW/n-6);
+      var mxH=Math.max.apply(null,horasSemanaData.map(function(d){return d.horas;}).concat([1]));
+      function xp(i){return PL+(i+0.5)*(cW/n);}
+      function yp(v){return PT+cH-(v/mxH)*cH;}
+      return h(Card,{pad:'18px 22px',gap:8},
+        h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:4}},
+          h(CT,{label:'Horas por semana (repartidas por días hábiles)'}),
+          h('span',{style:{fontSize:9,color:JMT}},'Abiertas: prorrateadas · Completadas: en su semana de cierre')),
+        h('svg',{width:'100%',viewBox:'0 0 '+W+' '+H,style:{overflow:'visible'}},
+          [0,0.5,1].map(function(f,i){
+            var v=Math.round(mxH*f), y=yp(v);
+            return h('g',{key:i},
+              h('line',{x1:PL,y1:y,x2:W-PR,y2:y,stroke:'#DDE2E8',strokeWidth:1,strokeDasharray:f>0?'3 3':''}),
+              h('text',{x:PL-4,y:y+3,textAnchor:'end',fontSize:8,fill:JMT},v+'h'));
+          }),
+          horasSemanaData.map(function(d,i){
+            var x=xp(i), barH=(d.horas/mxH)*cH, barY=PT+cH-barH;
+            return h('g',{key:i},
+              h('rect',{x:x-barW/2,y:barY,width:barW,height:barH,fill:JBL,rx:3,opacity:0.85}),
+              h('text',{x:x,y:barY-4,textAnchor:'middle',fontSize:8,fontWeight:700,fill:JBL},Math.round(d.horas)+'h'),
+              h('text',{x:x,y:H-20,textAnchor:'middle',fontSize:7,fill:JMT},d.label.split(' – ')[0]));
+          })));
+    }
+
     // ── 2. Solicitudes por tipo (horizontal bar) ──────────────────────────────
     function TipoChart(){
       return h(Card,{pad:'18px 22px',gap:10},
@@ -1538,7 +1642,8 @@ function App(){
         h(TiempoChart,null)),
       h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}},
         h(PrioChart,null),
-        h(AgingChart,null)));
+        h(AgingChart,null)),
+      h(HorasSemanaChart,null));
   }
 
 
