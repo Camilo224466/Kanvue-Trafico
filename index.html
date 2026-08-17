@@ -859,7 +859,11 @@ function App(){
     if(fp!=='Todos')f.push('País: '+fp);
     if(fc!=='Todos')f.push('Champion: '+fc);
     if(fpr!=='Todos')f.push('Prioridad: '+fpr);
-    if(fsem.length)f.push('Semana: '+fsem.map(semLabel).join(', '));
+    if(fRango.desde&&fRango.hasta){
+      var MNs=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+      function ff(d){return d.getDate()+' '+MNs[d.getMonth()]+' '+d.getFullYear();}
+      f.push((fCampo==='fecha'?'Solicitud':'Límite')+': '+ff(fRango.desde)+' — '+ff(fRango.hasta));
+    }
     if(search)f.push('Búsqueda: "'+search+'"');
     return f.length?'Filtros aplicados — '+f.join('  ·  '):'Sin filtros · todas las solicitudes';
   }
