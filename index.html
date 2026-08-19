@@ -252,7 +252,8 @@ function parseComentarios(rows){
       tareaId:Number(find('tarea','task id')||0),
       fecha:String(find('fecha')||''),
       usuario:String(find('usuario','autor','user')||''),
-      texto:String(find('texto','comentario','text')||'')
+      texto:String(find('texto','comentario','text')||''),
+      tipo:String(find('tipo')||'comentario')
     };
   }).filter(function(c){return c.texto&&c.texto.trim()!=='';});
 }
@@ -279,9 +280,9 @@ async function writeSP(data,comentariosArg){
   XLSX.utils.book_append_sheet(wb,ws,'Tráfico General');
 
   var coms = comentariosArg || [];
-  var comRows = coms.map(function(cm){return {'ID Comentario':cm.id,'Tarea ID':cm.tareaId,'Fecha':cm.fecha,'Usuario':cm.usuario,'Texto':cm.texto};});
-  var wsC = comRows.length ? XLSX.utils.json_to_sheet(comRows) : XLSX.utils.aoa_to_sheet([['ID Comentario','Tarea ID','Fecha','Usuario','Texto']]);
-  wsC['!cols']=[16,10,16,20,50].map(function(w){return {wch:w};});
+  var comRows = coms.map(function(cm){return {'ID Comentario':cm.id,'Tarea ID':cm.tareaId,'Fecha':cm.fecha,'Usuario':cm.usuario,'Texto':cm.texto,'Tipo':cm.tipo||'comentario'};});
+  var wsC = comRows.length ? XLSX.utils.json_to_sheet(comRows) : XLSX.utils.aoa_to_sheet([['ID Comentario','Tarea ID','Fecha','Usuario','Texto','Tipo']]);
+  wsC['!cols']=[16,10,16,20,50,12].map(function(w){return {wch:w};});
   XLSX.utils.book_append_sheet(wb,wsC,'Comentarios');
 
   var out=XLSX.write(wb,{bookType:'xlsx',type:'array'});
@@ -410,6 +411,7 @@ function ComentariosPanel(p){
   var [enviando,setEnviando]=useState(false);
   var lista = p.comentarios.filter(function(c){return c.tareaId===p.tareaId;})
     .sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);});
+  var numComentarios = lista.filter(function(c){return c.tipo!=='cambio';}).length;
 
   function enviar(){
     var t=texto.trim();
@@ -421,14 +423,22 @@ function ComentariosPanel(p){
   return h('div',{style:{marginTop:22,paddingTop:18,borderTop:'1px solid #DDE2E8'}},
     h('div',{style:{fontSize:12,fontWeight:700,color:'#0A0E14',marginBottom:12,
       display:'flex',alignItems:'center',gap:6}},
-      '💬 Comentarios',
-      h('span',{style:{fontSize:11,fontWeight:400,color:'#66717F'}},'('+lista.length+')')),
-    h('div',{style:{display:'flex',flexDirection:'column',gap:12,maxHeight:220,
+      '💬 Actividad',
+      h('span',{style:{fontSize:11,fontWeight:400,color:'#66717F'}},'('+numComentarios+' comentario'+(numComentarios===1?'':'s')+')')),
+    h('div',{style:{display:'flex',flexDirection:'column',gap:10,maxHeight:240,
       overflowY:'auto',marginBottom:12,paddingRight:4}},
       lista.length===0
         ? h('div',{style:{fontSize:12,color:'#9BA5B1',textAlign:'center',padding:'12px 0'}},
-            'Sin comentarios todavía.')
+            'Sin actividad todavía.')
         : lista.map(function(cm){
+            if(cm.tipo==='cambio'){
+              return h('div',{key:cm.id,style:{display:'flex',alignItems:'center',gap:8,
+                background:'#F4F6F8',borderRadius:6,padding:'6px 10px'}},
+                h('span',{style:{fontSize:11,flexShrink:0}},'🕐'),
+                h('span',{style:{fontSize:11,color:'#66717F',flex:1}},
+                  h('b',{style:{color:'#3A4553',fontWeight:600}},cm.usuario),' — ',cm.texto),
+                h('span',{style:{fontSize:10,color:'#9BA5B1',flexShrink:0}},fechaRelativa(cm.fecha)));
+            }
             var ini=cm.usuario.split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase();
             return h('div',{key:cm.id,style:{display:'flex',gap:9}},
               h('div',{style:{width:26,height:26,minWidth:26,borderRadius:'50%',background:'#1B4B7F',
@@ -922,17 +932,47 @@ function App(){
     finally{ setSaving(false); }
   }
 
+  // ── Historial de cambios (auditoría automática) ────────────────────────────
+  var CAMPOS_HISTORIAL = {
+    estado:'Estado', avance:'% Avance', champion:'Champion(s)',
+    categoria:'Categoría(s)', prioridad:'Prioridad', fechaLimite:'Fecha Límite'
+  };
+  function generarHistorial(antes,editado,usuario){
+    var out=[];
+    Object.keys(CAMPOS_HISTORIAL).forEach(function(campo){
+      if(antes[campo]===editado[campo]) return;
+      var vAntes = campo==='avance' ? (antes[campo]+'%') : (antes[campo]||'—');
+      var vDesp  = campo==='avance' ? (editado[campo]+'%') : (editado[campo]||'—');
+      var now=new Date();
+      var fechaStr=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0')+'T'+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+      out.push({
+        id:'h'+Date.now()+Math.random().toString(36).slice(2,6),
+        tareaId:editado.id, fecha:fechaStr, usuario:usuario,
+        texto:CAMPOS_HISTORIAL[campo]+': '+vAntes+' → '+vDesp,
+        tipo:'cambio'
+      });
+    });
+    return out;
+  }
+
   // updateItem: relee lo que hay en SharePoint AHORA, fusiona solo los campos
-  // que este usuario tocó (antes vs editado), y guarda esa versión fusionada.
+  // que este usuario tocó (antes vs editado), guarda esa versión fusionada,
+  // y registra automáticamente los cambios auditables en el historial.
   async function updateItem(editado,antes){
     setSaving(true);
     try{
       var sp=await readSP();
       var ndFresco = antes ? fusionarTarea(sp.tareas,antes,editado)
                             : sp.tareas.map(function(x){return x.id===editado.id?editado:x;});
+      var ncFresco = sp.comentarios;
+      if(antes){
+        var nombre=(user&&user.name)?user.name.split(' ').slice(0,2).join(' '):((user&&(user.username||user.mail))||'—');
+        var entradas=generarHistorial(antes,editado,nombre);
+        if(entradas.length) ncFresco = ncFresco.concat(entradas);
+      }
       setData(ndFresco);
-      setComentarios(sp.comentarios);
-      await writeSP(ndFresco,sp.comentarios);
+      setComentarios(ncFresco);
+      await writeSP(ndFresco,ncFresco);
       showToast('✅ Guardado en SharePoint');
     }catch(e){ showToast('❌ '+e.message,'err'); }
     finally{ setSaving(false); }
@@ -958,7 +998,7 @@ function App(){
     var nombre=(user&&user.name)?user.name.split(' ').slice(0,2).join(' '):email;
     var now=new Date();
     var fechaStr=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0')+'T'+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
-    var nuevo={id:'c'+Date.now()+Math.random().toString(36).slice(2,6),tareaId:tareaId,fecha:fechaStr,usuario:nombre,texto:texto};
+    var nuevo={id:'c'+Date.now()+Math.random().toString(36).slice(2,6),tareaId:tareaId,fecha:fechaStr,usuario:nombre,texto:texto,tipo:'comentario'};
     setSaving(true);
     try{
       var sp=await readSP();
@@ -1486,7 +1526,7 @@ function App(){
               h('span',{style:{fontSize:11,fontWeight:700,color:'#fff',background:sm.dot,borderRadius:20,padding:'2px 9px'}},cards.length)),
             h('div',{style:{display:'flex',flexDirection:'column',gap:10,minHeight:60}},
               cards.map(function(item){return h(KCard,{key:item.id,item:item,onClick:setSel,
-                numComentarios:comentarios.filter(function(cm){return cm.tareaId===item.id;}).length,
+                numComentarios:comentarios.filter(function(cm){return cm.tareaId===item.id&&cm.tipo!=='cambio';}).length,
                 draggable:true,dragging:dragId===item.id,
                 onDragStart:function(id){setDragId(id);},
                 onDragEnd:function(){setDragId(null);setDragOver(null);}});}),
@@ -1524,7 +1564,7 @@ function App(){
             h('span',{style:{fontSize:11,fontWeight:700,color:'#fff',background:sm.dot,borderRadius:20,padding:'2px 9px'}},cards.length)),
           h('div',{style:{display:'flex',flexDirection:'column',gap:10,minHeight:60}},
             cards.map(function(item){return h(KCard,{key:item.id,item:item,onClick:setSel,
-              numComentarios:comentarios.filter(function(cm){return cm.tareaId===item.id;}).length,
+              numComentarios:comentarios.filter(function(cm){return cm.tareaId===item.id&&cm.tipo!=='cambio';}).length,
               draggable:true,dragging:dragId===item.id,
               onDragStart:function(id){setDragId(id);},
               onDragEnd:function(){setDragId(null);setDragOver(null);}});}),
@@ -1811,11 +1851,12 @@ function App(){
             vVencidas.slice(0,4).map(function(v,i){
               var ch=v.d.champion.split('/')[0].trim().split(' ');
               var corto=ch[0]+(ch[1]?' '+ch[1].charAt(0)+'.':'');
+              var bandera=v.d.pais==='Colombia'?'🇨🇴':'🇲🇽';
               return h('div',{key:i,style:{display:'flex',alignItems:'center',gap:8,fontSize:11}},
                 h('span',{style:{background:'#F0D2D6',color:'#7A1420',borderRadius:3,padding:'1px 6px',
                   fontWeight:700,minWidth:32,textAlign:'center',flexShrink:0}},v.dias+'d'),
                 h('span',{style:{color:JTX,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},v.d.solicitud),
-                h('span',{style:{color:JMT,flexShrink:0}},corto));
+                h('span',{style:{color:JMT,flexShrink:0,display:'flex',alignItems:'center',gap:4}},bandera,corto));
             }))),
         vVencidas.length===0&&h('div',{style:{fontSize:11,color:JGR,fontWeight:600,padding:'4px 0'}},
           '✓ Sin tareas vencidas'));
