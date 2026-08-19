@@ -240,7 +240,7 @@ function parseRows(rows){
   return rows.map(function(r,i){
     var keys=Object.keys(r);
     function find(){for(var a=0;a<arguments.length;a++){var c=arguments[a];var k=keys.find(function(k){return k.toLowerCase().indexOf(c.toLowerCase())!==-1;});if(k!==undefined)return r[k];}return '';}
-    return {id:Number(find('#','id','num')||i+1),semana:String(find('semana','week')||'Sem 1'),fecha:String(find('fecha sol','fecha_sol')||''),pais:String(find('país','pais','country')||'Colombia'),categoria:String(find('categor')||'Baby'),solicitud:String(find('entregable','solicitud / entregable')||''),tipo:String(find('tipo','type')||'Análisis'),champion:String(find('champion','responsable','owner')||''),prioridad:String(find('prioridad','priority')||'Media'),esfuerzo:Number(find('esfuerzo','hrs','horas','effort')||0),fechaLimite:String(find('fecha l','deadline','vencimiento','limite')||''),estado:String(find('estado','status','estatus')||'Pendiente'),avance:Number(String(find('avance','progreso','porcentaje')).replace('%','')||0),comentarios:String(find('comentario','nota','comment')||''),orden:Number(find('orden','order')||(i+1)*10)};
+    return {id:Number(find('#','id','num')||i+1),semana:String(find('semana','week')||'Sem 1'),fecha:String(find('fecha sol','fecha_sol')||''),pais:String(find('país','pais','country')||'Colombia'),categoria:String(find('categor')||'Baby'),solicitud:String(find('entregable','solicitud / entregable')||''),tipo:String(find('tipo','type')||'Análisis'),champion:String(find('champion','responsable','owner')||''),prioridad:String(find('prioridad','priority')||'Media'),esfuerzo:Number(find('esfuerzo','hrs','horas','effort')||0),fechaLimite:String(find('fecha l','deadline','vencimiento','limite')||''),estado:String(find('estado','status','estatus')||'Pendiente'),avance:Number(String(find('avance','progreso','porcentaje')).replace('%','')||0),comentarios:String(find('comentario','nota','comment')||''),orden:Number(find('orden','order')||(i+1)*10),bloqueada:String(find('bloqueada','blocked')||'').toLowerCase()==='si'||String(find('bloqueada','blocked')||'').toLowerCase()==='sí'||String(find('bloqueada','blocked')||'').toLowerCase()==='true',motivoBloqueo:String(find('motivo bloqueo','motivo','blocked reason')||'')};
   }).filter(function(r){return r.solicitud&&r.solicitud.trim()!=='';});
 }
 function parseComentarios(rows){
@@ -274,9 +274,9 @@ async function writeSP(data,comentariosArg){
   if(!t) throw new Error('No se pudo obtener token');
   console.log('Guardando en SharePoint... driveId='+driveId+' fileId='+fileId);
   var wb=XLSX.utils.book_new();
-  var rows=data.map(function(d){return {'#':d.id,'Semana':d.semana,'Fecha Solicitud':d.fecha,'País':d.pais,'Categoría':d.categoria,'Solicitud / Entregable':d.solicitud,'Tipo':d.tipo,'Champion Interno':d.champion,'Prioridad':d.prioridad,'Esfuerzo (hrs)':d.esfuerzo,'Fecha Límite':d.fechaLimite,'Estado':d.estado,'% Avance':d.avance,'Comentarios':d.comentarios,'Orden':d.orden};});
+  var rows=data.map(function(d){return {'#':d.id,'Semana':d.semana,'Fecha Solicitud':d.fecha,'País':d.pais,'Categoría':d.categoria,'Solicitud / Entregable':d.solicitud,'Tipo':d.tipo,'Champion Interno':d.champion,'Prioridad':d.prioridad,'Esfuerzo (hrs)':d.esfuerzo,'Fecha Límite':d.fechaLimite,'Estado':d.estado,'% Avance':d.avance,'Comentarios':d.comentarios,'Orden':d.orden,'Bloqueada':d.bloqueada?'Sí':'No','Motivo Bloqueo':d.motivoBloqueo||''};});
   var ws=XLSX.utils.json_to_sheet(rows);
-  ws['!cols']=[4,8,14,10,18,45,12,18,10,10,12,12,10,30,8].map(function(w){return {wch:w};});
+  ws['!cols']=[4,8,14,10,18,45,12,18,10,10,12,12,10,30,8,10,30].map(function(w){return {wch:w};});
   XLSX.utils.book_append_sheet(wb,ws,'Tráfico General');
 
   var coms = comentariosArg || [];
@@ -315,7 +315,7 @@ function KCard(p){
       if(p.onDragStart)p.onDragStart(item.id);
     },
     onDragEnd:function(){if(p.onDragEnd)p.onDragEnd();},
-    style:{background:'#fff',borderRadius:12,padding:'14px 16px',border:'1px solid #DDE2E8',boxShadow:'0 2px 6px rgba(0,0,0,.05)',cursor:p.draggable?'grab':'pointer',borderLeft:'4px solid '+pc.accent,opacity:p.dragging?0.4:1},
+    style:{background:item.bloqueada?'#FEF7F7':'#fff',borderRadius:12,padding:'14px 16px',border:'1px solid '+(item.bloqueada?'#F0D2D6':'#DDE2E8'),boxShadow:'0 2px 6px rgba(0,0,0,.05)',cursor:p.draggable?'grab':'pointer',borderLeft:'4px solid '+(item.bloqueada?'#A81E2D':pc.accent),opacity:p.dragging?0.4:1},
     onMouseEnter:function(e){e.currentTarget.style.boxShadow='0 6px 20px rgba(0,0,0,.12)';},
     onMouseLeave:function(e){e.currentTarget.style.boxShadow='0 2px 6px rgba(0,0,0,.05)';}},
     h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:8,gap:8}},
@@ -324,6 +324,11 @@ function KCard(p){
           borderRadius:'50%',background:'#B8721A',marginTop:5,flexShrink:0}}),
         h('div',{style:{fontSize:12,fontWeight:700,color:KG,lineHeight:1.4}},item.solicitud)),
       h(Badge,{color:pm.color,bg:pm.bg,small:true},item.prioridad)),
+    item.bloqueada&&h('div',{title:item.motivoBloqueo||'Sin motivo especificado',
+      style:{display:'flex',alignItems:'center',gap:5,background:'#F0D2D6',color:'#7A1420',
+        borderRadius:5,padding:'3px 8px',marginBottom:9,fontSize:10,fontWeight:700}},
+      '🚫 Bloqueada',item.motivoBloqueo&&h('span',{style:{fontWeight:400,overflow:'hidden',
+        textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}},'· '+item.motivoBloqueo)),
     h('div',{style:{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}},
       h(PaisChip,{pais:item.pais}),
       h(Badge,{color:'#555',bg:'#F4F6F8',small:true},item.categoria),
@@ -515,6 +520,18 @@ function EditModal(p){
         h(FG,{label:'% Avance — '+form.avance+'%'},
           h('input',{type:'range',min:0,max:100,step:5,value:form.avance,onChange:function(e){set('avance',+e.target.value);},style:{width:'100%',accentColor:sm.dot,margin:'6px 0'}}),
           h(PBar,{value:form.avance,color:sm.dot}))),
+      h('div',{style:{marginTop:14,background:form.bloqueada?'#F0D2D6':'#F4F6F8',
+        borderRadius:8,padding:'10px 12px',border:'1px solid '+(form.bloqueada?'#A81E2D':'#DDE2E8')}},
+        h('label',{style:{display:'flex',alignItems:'center',gap:8,cursor:'pointer',fontSize:12,
+          fontWeight:700,color:form.bloqueada?'#7A1420':'#3A4553'}},
+          h('input',{type:'checkbox',checked:form.bloqueada,
+            onChange:function(e){set('bloqueada',e.target.checked);},
+            style:{width:15,height:15,cursor:'pointer'}}),
+          '🚫 Bloqueada'),
+        form.bloqueada&&h('textarea',{value:form.motivoBloqueo,
+          onChange:function(e){set('motivoBloqueo',e.target.value);},
+          placeholder:'¿Por qué está bloqueada? (ej: esperando acceso, respuesta de X)',rows:2,
+          style:Object.assign({},INP,{resize:'vertical',marginTop:8,background:'#fff'})})),
       h('div',{style:{marginTop:14}},h(FG,{label:'Nota interna (campo original del Excel)'},h('textarea',{value:form.comentarios,onChange:function(e){set('comentarios',e.target.value);},rows:2,style:Object.assign({},INP,{resize:'vertical'})}))),
       h('div',{style:{display:'flex',gap:10,marginTop:20}},
         h('button',{onClick:function(){p.onSave(form,p.item);p.onClose();},style:{flex:1,padding:'11px',background:KG,color:'#fff',border:'none',borderRadius:10,fontWeight:700,fontSize:13,cursor:'pointer'}},'💾 Guardar en SharePoint'),
@@ -523,7 +540,7 @@ function EditModal(p){
 }
 
 function NewModal(p){
-  var [form,setForm]=useState({id:p.nextId,semana:'Sem 1',fecha:new Date().toLocaleDateString('es-CO'),pais:'Colombia',categoria:'',solicitud:'',tipo:'Análisis',champion:'David Rodríguez',prioridad:'Media',esfuerzo:4,fechaLimite:'',estado:'Pendiente',avance:0,comentarios:'',orden:Date.now()});
+  var [form,setForm]=useState({id:p.nextId,semana:'Sem 1',fecha:new Date().toLocaleDateString('es-CO'),pais:'Colombia',categoria:'',solicitud:'',tipo:'Análisis',champion:'David Rodríguez',prioridad:'Media',esfuerzo:4,fechaLimite:'',estado:'Pendiente',avance:0,comentarios:'',orden:Date.now(),bloqueada:false,motivoBloqueo:''});
   function set(k,v){setForm(function(f){return Object.assign({},f,{[k]:v});});}
   var ok=form.solicitud.trim().length>3&&form.fechaLimite;
   return h('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:16},onClick:function(e){if(e.target===e.currentTarget)p.onClose();}},
@@ -943,7 +960,8 @@ function App(){
 
   // ── Guardado con relectura + fusión (evita perder cambios en paralelo) ─────
   var CAMPOS_TAREA=['pais','categoria','solicitud','tipo','champion','prioridad',
-    'esfuerzo','fechaLimite','estado','avance','comentarios','semana','fecha'];
+    'esfuerzo','fechaLimite','estado','avance','comentarios','semana','fecha',
+    'orden','bloqueada','motivoBloqueo'];
 
   // Fusiona: parte de lo que hay AHORA en SharePoint, y sobre eso aplica
   // únicamente los campos que el usuario cambió respecto al "antes" que tenía.
@@ -1858,6 +1876,23 @@ function App(){
     }
 
     // ── KPI strip ─────────────────────────────────────────────────────────────
+    // ── Comparación vs período anterior (misma duración, inmediatamente antes) ──
+    var comparacion = null;
+    if(fRango.desde&&fRango.hasta){
+      var durMs = fRango.hasta - fRango.desde;
+      var prevHasta = new Date(fRango.desde.getTime()-86400000);
+      var prevDesde = new Date(prevHasta.getTime()-durMs);
+      var prevRows = data.filter(function(d){
+        var fv=pF(fCampo==='fecha'?d.fecha:d.fechaLimite);
+        return fv&&fv>=prevDesde&&fv<=prevHasta;
+      });
+      if(prevRows.length){
+        var prevComp=prevRows.filter(function(d){return d.estado==='Completado';}).length;
+        var prevPct=Math.round(prevComp/prevRows.length*100);
+        comparacion = {pctAnterior:prevPct, totalAnterior:prevRows.length};
+      }
+    }
+
     function KpiStrip(){
       var items=[
         {label:'Total',value:total,color:JBL,sub:'solicitudes'},
@@ -1867,15 +1902,20 @@ function App(){
         {label:'Pendiente',value:pendientes,color:JRD,sub:'sin iniciar'},
         {label:'Horas',value:hrsTotal+'h',color:JTL,sub:hrsHechas+'h completadas'},
       ];
-      return h('div',{style:{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:12}},
-        items.map(function(it){
-          return h('div',{key:it.label,style:{background:JCARD,border:'1px solid '+JBR,
-            borderTop:'3px solid '+it.color,borderRadius:6,padding:'14px 18px',
-            boxShadow:'0 1px 3px rgba(0,0,0,.06)'}},
-            h('div',{style:{fontSize:10,fontWeight:600,color:JMT,textTransform:'uppercase',letterSpacing:'0.7px',marginBottom:6}},it.label),
-            h('div',{style:{fontSize:32,fontWeight:800,color:it.color,lineHeight:1,marginBottom:4}},it.value),
-            h('div',{style:{fontSize:11,color:JMT}},it.sub));
-        }));
+      return h('div',null,
+        h('div',{style:{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:12}},
+          items.map(function(it){
+            return h('div',{key:it.label,style:{background:JCARD,border:'1px solid '+JBR,
+              borderTop:'3px solid '+it.color,borderRadius:6,padding:'14px 18px',
+              boxShadow:'0 1px 3px rgba(0,0,0,.06)'}},
+              h('div',{style:{fontSize:10,fontWeight:600,color:JMT,textTransform:'uppercase',letterSpacing:'0.7px',marginBottom:6}},it.label),
+              h('div',{style:{fontSize:32,fontWeight:800,color:it.color,lineHeight:1,marginBottom:4}},it.value),
+              h('div',{style:{fontSize:11,color:JMT}},it.sub));
+          })),
+        comparacion&&h('div',{style:{marginTop:8,display:'flex',alignItems:'center',gap:6,fontSize:11,color:JMT}},
+          h('span',{style:{fontWeight:700,color:pctDone>=comparacion.pctAnterior?JGR:JRD}},
+            (pctDone>=comparacion.pctAnterior?'↑ ':'↓ ')+pctDone+'%'),
+          'vs '+comparacion.pctAnterior+'% del período anterior ('+comparacion.totalAnterior+' solicitudes)'));
     }
 
     // ── Sprint progress ───────────────────────────────────────────────────────
@@ -1924,10 +1964,14 @@ function App(){
               var ch=v.d.champion.split('/')[0].trim().split(' ');
               var corto=ch[0]+(ch[1]?' '+ch[1].charAt(0)+'.':'');
               var bandera=v.d.pais==='Colombia'?'🇨🇴':'🇲🇽';
+              var av=v.d.avance;
+              var tag = av>=70 ? {t:'casi lista',c:'#B8721A'} : av<30 ? {t:'sin tocar',c:'#7A1420'} : null;
               return h('div',{key:i,style:{display:'flex',alignItems:'center',gap:8,fontSize:11}},
                 h('span',{style:{background:'#F0D2D6',color:'#7A1420',borderRadius:3,padding:'1px 6px',
                   fontWeight:700,minWidth:32,textAlign:'center',flexShrink:0}},v.dias+'d'),
                 h('span',{style:{color:JTX,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},v.d.solicitud),
+                tag&&h('span',{style:{fontSize:9,color:tag.c,background:tag.c+'1a',borderRadius:8,
+                  padding:'1px 6px',fontWeight:700,flexShrink:0}},tag.t+' '+av+'%'),
                 h('span',{style:{color:JMT,flexShrink:0,display:'flex',alignItems:'center',gap:4}},bandera,corto));
             }))),
         vVencidas.length===0&&h('div',{style:{fontSize:11,color:JGR,fontWeight:600,padding:'4px 0'}},
@@ -2239,6 +2283,37 @@ function App(){
         .filter(function(d){return d.value>0;}).sort(function(a,b){return b.value-a.value;})}
     ];
 
+    // ── Prometido vs entregado — semana actual (fecha límite dentro de la semana) ─
+    function PrometidoSemana(){
+      var hoy=new Date(); hoy.setHours(0,0,0,0);
+      var lunes=lunesDe(hoy);
+      var domingo=new Date(lunes); domingo.setDate(domingo.getDate()+6);
+      var prometidas = data.filter(function(d){
+        var lim=pF(d.fechaLimite);
+        return lim&&lim>=lunes&&lim<=domingo;
+      });
+      var entregadas = prometidas.filter(function(d){return d.estado==='Completado';});
+      var movidas = prometidas.filter(function(d){return d.estado!=='Completado'&&d.estado!=='Pendiente';});
+      var abiertas2 = prometidas.filter(function(d){return d.estado==='Pendiente';});
+      var pct = prometidas.length ? Math.round(entregadas.length/prometidas.length*100) : 0;
+      return h(Card,{pad:'18px 22px',gap:12},
+        h(CT,{label:'Prometido vs entregado — esta semana ('+labelSemanaCal(lunes)+')'}),
+        prometidas.length===0
+          ? h('div',{style:{fontSize:12,color:JMT,textAlign:'center',padding:'20px 0'}},'No hay tareas con vencimiento esta semana')
+          : h('div',null,
+              h('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginBottom:12}},
+                [['Prometidas',prometidas.length,JTX],['Entregadas',entregadas.length,JGR],
+                 ['En curso',movidas.length,JOR],['Sin iniciar',abiertas2.length,JRD]].map(function(x,i){
+                  return h('div',{key:i,style:{background:JBG,borderRadius:6,padding:'10px 8px',textAlign:'center'}},
+                    h('div',{style:{fontSize:22,fontWeight:800,color:x[2]}},x[1]),
+                    h('div',{style:{fontSize:9,color:JMT,marginTop:2}},x[0]));
+                })),
+              h('div',{style:{height:8,background:'#DDE2E8',borderRadius:4,overflow:'hidden',marginBottom:6}},
+                h('div',{style:{width:pct+'%',height:'100%',background:pct>=70?JGR:pct>=40?JOR:JRD,borderRadius:4}})),
+              h('div',{style:{fontSize:11,color:JMT,textAlign:'center'}},
+                pct+'% de lo prometido esta semana ya se entregó')));
+    }
+
     // ── LAYOUT ────────────────────────────────────────────────────────────────
     return h('div',{style:{display:'flex',flexDirection:'column',gap:14,background:JBG,padding:'4px 0 24px'}},
       h(KpiStrip,null),
@@ -2247,6 +2322,7 @@ function App(){
           return h(Donut,{key:i,title:s.title,unit:s.unit,data:s.data});
         })),
       h(DonutDetalle,null),
+      h(PrometidoSemana,null),
       h('div',{style:{display:'grid',gridTemplateColumns:'1.1fr 1fr',gap:14}},
         h(SprintProgress,null),
         h(ChampionTable,null)),
