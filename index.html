@@ -89,11 +89,18 @@ body{background:#F4F6F8;font-family:'Aptos Narrow',Aptos,'Segoe UI',Arial,sans-s
 ::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px}
 select,input,textarea{font-family:inherit}
 #rep{display:none}
+#orden{display:none}
+body.print-orden{}
 @media print{
-  @page{size:A4 landscape;margin:10mm}
   body{background:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  #root>div>div:not(#rep){display:none!important}
-  #rep{display:block!important}
+  @page{size:A4 landscape;margin:10mm}
+  body.print-orden{}
+  @page print-orden-page{size:A4 portrait;margin:0}
+  #root>div>div:not(#rep):not(#orden){display:none!important}
+  body:not(.print-orden) #rep{display:block!important}
+  body.print-orden #rep{display:none!important}
+  body.print-orden #orden{display:block!important;page:print-orden-page}
+  body:not(.print-orden) #orden{display:none!important}
   .pg{page-break-after:always;break-after:page}
   .pg:last-child{page-break-after:auto;break-after:auto}
   .nb{page-break-inside:avoid;break-inside:avoid}
@@ -580,6 +587,129 @@ function Reporte(p){
     portada, resumen, distrib);
 }
 
+function OrdenModal(p){
+  var [narr,setNarr]=useState(p.narrativaInicial);
+  var [valor,setValor]=useState('MXN$ 0.00 (no incluye IVA)');
+  return h('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:1000,
+    display:'flex',alignItems:'center',justifyContent:'center',padding:16},
+    onClick:function(e){if(e.target===e.currentTarget)p.onClose();}},
+    h('div',{style:{background:'#fff',borderRadius:12,width:'100%',maxWidth:560,
+      maxHeight:'90vh',overflow:'auto',padding:26}},
+      h('div',{style:{fontSize:15,fontWeight:700,color:'#0A0E14',marginBottom:4}},'Orden de Trabajo · México'),
+      h('div',{style:{fontSize:11,color:'#66717F',marginBottom:18}},
+        'Se genera con las tareas de México dentro del rango de fechas activo. Revisa y ajusta la narrativa antes de exportar.'),
+      h('div',{style:{marginBottom:14}},
+        h('div',{style:{fontSize:10,fontWeight:700,color:'#66717F',marginBottom:5,textTransform:'uppercase'}},'Actividades ejecutadas (editable)'),
+        h('textarea',{value:narr,onChange:function(e){setNarr(e.target.value);},rows:6,
+          style:{width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid #DDE2E8',
+            fontSize:12,fontFamily:'inherit',resize:'vertical',boxSizing:'border-box'}})),
+      h('div',{style:{marginBottom:20}},
+        h('div',{style:{fontSize:10,fontWeight:700,color:'#66717F',marginBottom:5,textTransform:'uppercase'}},'Valor del servicio'),
+        h('input',{value:valor,onChange:function(e){setValor(e.target.value);},
+          style:{width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid #DDE2E8',
+            fontSize:12,fontFamily:'inherit',boxSizing:'border-box'}})),
+      h('div',{style:{display:'flex',gap:10}},
+        h('button',{onClick:function(){p.onGenerar(narr,valor);},style:{flex:1,padding:'11px',
+          background:'#1B4B7F',color:'#fff',border:'none',borderRadius:8,fontWeight:700,
+          fontSize:13,cursor:'pointer'}},'🖨 Generar PDF'),
+        h('button',{onClick:p.onClose,style:{padding:'11px 20px',background:'#F4F6F8',
+          color:'#3A4553',border:'none',borderRadius:8,fontWeight:600,fontSize:13,
+          cursor:'pointer'}},'Cancelar'))));
+}
+
+function OrdenTrabajo(p){
+  var INK='#0A0E14',BL1='#1B4B7F',G1='#3A4553',G2='#66717F',G4='#DDE2E8',G5='#F4F6F8';
+  var GRN='#1E6B4F',ORA='#B8721A';
+  var d=p.data;
+
+  function Fila(label,val){
+    return h('tr',null,
+      h('td',{style:{padding:'6px 10px',borderBottom:'1px solid '+G4,color:G2,fontSize:10,width:'55%'}},label),
+      h('td',{style:{padding:'6px 10px',borderBottom:'1px solid '+G4,color:INK,fontSize:10,fontWeight:700}},val));
+  }
+
+  return h('div',{id:'orden',style:{background:'#fff',color:INK,padding:'14mm 16mm',
+    fontFamily:'"Aptos Narrow",Aptos,"Segoe UI",Arial,sans-serif',fontSize:11,lineHeight:1.5}},
+
+    h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',
+      borderBottom:'2px solid '+INK,paddingBottom:10,marginBottom:16}},
+      h('div',null,
+        h('div',{style:{fontSize:20,fontWeight:700,color:INK,marginBottom:3}},'ORDEN DE TRABAJO'),
+        h('div',{style:{fontSize:12,color:BL1,fontWeight:600}},'Servicios de Soporte Operativo y Category Management'),
+        h('div',{style:{fontSize:11,color:G2}},'Kenvue México – '+(d.tituloMes.charAt(0).toUpperCase()+d.tituloMes.slice(1)))),
+      h('img',{src:'data:image/png;base64,'+LOGO_B64,style:{height:26}})),
+
+    h('table',{style:{width:'100%',borderCollapse:'collapse',marginBottom:16}},
+      h('tbody',null,
+        Fila('Cliente','Kenvue México, S.A. de C.V.'),
+        Fila('Proveedor','Retail Latam BS SA de CV'),
+        Fila('Período',d.periodo),
+        Fila('Servicio','Soporte de Category Management'))),
+
+    h('div',{style:{fontSize:11,fontWeight:700,color:INK,marginBottom:6}},'OBJETIVO'),
+    h('div',{style:{fontSize:10,color:G1,marginBottom:16,textAlign:'justify'}},
+      'Ejecutar las actividades de soporte operativo, analítico, data management, reportes, dashboards, '+
+      'planogramación y seguimiento funcional requeridas para la prestación continua de los servicios de '+
+      'soporte a Category Management para Kenvue México durante '+d.tituloMes+'.'),
+
+    h('div',{style:{fontSize:11,fontWeight:700,color:INK,marginBottom:8}},'RESUMEN DE ACTIVIDADES EJECUTADAS'),
+    h('table',{style:{width:'100%',borderCollapse:'collapse',marginBottom:16,fontSize:10}},
+      h('thead',null,h('tr',null,
+        h('th',{style:{textAlign:'left',padding:'6px 10px',background:G5,color:G2,
+          fontSize:9,textTransform:'uppercase',letterSpacing:'.5px',borderBottom:'1px solid '+G4}},'Indicador'),
+        h('th',{style:{textAlign:'left',padding:'6px 10px',background:G5,color:G2,
+          fontSize:9,textTransform:'uppercase',letterSpacing:'.5px',borderBottom:'1px solid '+G4}},'Valor'))),
+      h('tbody',null,
+        Fila('Actividades registradas',d.total),
+        Fila('Actividades completadas',d.comp),
+        Fila('Actividades en progreso',d.prog),
+        Fila('Actividades pendientes',d.pend),
+        Fila('Principales tipos de entregable',d.tipos))),
+
+    h('div',{style:{fontSize:11,fontWeight:700,color:INK,marginBottom:6}},'ACTIVIDADES EJECUTADAS'),
+    h('div',{style:{fontSize:10,color:G1,marginBottom:16,whiteSpace:'pre-line',textAlign:'justify'}},p.narrativa),
+
+    h('div',{style:{fontSize:11,fontWeight:700,color:INK,marginBottom:8}},'DETALLE DE ACTIVIDADES REGISTRADAS'),
+    h('table',{style:{width:'100%',borderCollapse:'collapse',marginBottom:18,fontSize:8.5}},
+      h('thead',null,h('tr',null,
+        ['#','Semana','Categoría','Tipo','Estado','Solicitud / Entregable'].map(function(t,i){
+          return h('th',{key:i,style:{textAlign:'left',padding:'4px 6px',background:G5,color:G2,
+            fontSize:7.5,textTransform:'uppercase',letterSpacing:'.4px',borderBottom:'1px solid '+G4,
+            width:i===0?'26px':i===1?'70px':i===4?'70px':'auto'}},t);
+        }))),
+      h('tbody',null,d.rows.map(function(r,i){
+        var col=r.estado==='Completado'?GRN:r.estado==='En progreso'?BL1:ORA;
+        return h('tr',{key:i},
+          h('td',{style:{padding:'3px 6px',borderBottom:'1px solid '+G4,color:G2}},i+1),
+          h('td',{style:{padding:'3px 6px',borderBottom:'1px solid '+G4,color:G2}},r.semana),
+          h('td',{style:{padding:'3px 6px',borderBottom:'1px solid '+G4,color:G1}},r.categoria),
+          h('td',{style:{padding:'3px 6px',borderBottom:'1px solid '+G4,color:G1}},r.tipo),
+          h('td',{style:{padding:'3px 6px',borderBottom:'1px solid '+G4,color:col,fontWeight:700}},r.estado),
+          h('td',{style:{padding:'3px 6px',borderBottom:'1px solid '+G4,color:INK}},r.solicitud));
+      }))),
+
+    h('div',{style:{fontSize:11,fontWeight:700,color:INK,marginBottom:6}},'ENTREGABLE'),
+    h('div',{style:{fontSize:10,color:G1,marginBottom:18,textAlign:'justify'}},
+      'Actividades operativas y entregables de soporte a Category Management ejecutados y/o gestionados '+
+      'durante '+d.tituloMes+', conforme al listado de actividades reportadas por el equipo de trabajo para México.'),
+
+    h('div',{style:{background:G5,borderRadius:4,padding:'12px 16px',marginBottom:26,
+      display:'flex',justifyContent:'space-between',alignItems:'center'}},
+      h('div',{style:{fontSize:10,color:G1}},'Servicios de Soporte Operativo y Category Management – '+
+        (d.tituloMes.charAt(0).toUpperCase()+d.tituloMes.slice(1))),
+      h('div',{style:{fontSize:14,fontWeight:700,color:INK}},p.valor)),
+
+    h('div',{style:{marginTop:30}},
+      h('div',{style:{fontSize:10,color:G2,marginBottom:2}},'At'),
+      h('div',{style:{fontSize:11,fontWeight:700,color:INK}},'Paola Jiménez'),
+      h('div',{style:{fontSize:10,color:G2}},'Directora Comercial'),
+      h('div',{style:{fontSize:10,color:G2}},'Retailatam BS SA de CV')),
+
+    h('div',{style:{marginTop:20,paddingTop:8,borderTop:'1px solid '+G4,
+      fontSize:8,color:G2,textAlign:'center'}},
+      'Retailatam Business Solutions | Orden de Trabajo '+d.tituloMes));
+}
+
 // ── Main App ──────────────────────────────────────────────────────────────────
 function App(){
   var [data,setData]=useState([]);
@@ -598,6 +728,9 @@ function App(){
   var [showNew,setShowNew]=useState(false);
   var [donutSel,setDonutSel]=useState(null);
   var [isAdmin,setIsAdmin]=useState(false);
+  var [showOrden,setShowOrden]=useState(false);
+  var [ordenNarr,setOrdenNarr]=useState('');
+  var [ordenValor,setOrdenValor]=useState('');
   var [calMes,setCalMes]=useState(null);
   var [calDia,setCalDia]=useState(null);
   var [user,setUser]=useState(null);
@@ -866,6 +999,53 @@ function App(){
     }
     if(search)f.push('Búsqueda: "'+search+'"');
     return f.length?'Filtros aplicados — '+f.join('  ·  '):'Sin filtros · todas las solicitudes';
+  }
+
+  // ── Datos para la Orden de Trabajo (México) ────────────────────────────────
+  function ordenData(){
+    var MNfull=['enero','febrero','marzo','abril','mayo','junio','julio','agosto',
+                'septiembre','octubre','noviembre','diciembre'];
+    var rows = filtered.filter(function(d){return d.pais==='México';});
+    var comp=rows.filter(function(d){return d.estado==='Completado';}).length;
+    var prog=rows.filter(function(d){return d.estado==='En progreso';}).length;
+    var pend=rows.filter(function(d){return d.estado==='Pendiente'||d.estado==='En revisión';}).length;
+
+    var tipoCount={};
+    rows.forEach(function(d){ tipoCount[d.tipo]=(tipoCount[d.tipo]||0)+1; });
+    var tipos=Object.keys(tipoCount).sort(function(a,b){return tipoCount[b]-tipoCount[a];})
+      .map(function(t){return t+' ('+tipoCount[t]+')';}).join(', ');
+
+    // etiqueta de periodo, a partir del rango de fechas activo
+    var periodo, tituloMes;
+    if(fRango.desde&&fRango.hasta){
+      var d1=fRango.desde, d2=fRango.hasta;
+      periodo='Del '+d1.getDate()+' de '+MNfull[d1.getMonth()]+' al '+d2.getDate()+' de '+MNfull[d2.getMonth()]+' de '+d2.getFullYear();
+      tituloMes = (d1.getMonth()===d2.getMonth()&&d1.getFullYear()===d2.getFullYear())
+        ? MNfull[d1.getMonth()]+' '+d1.getFullYear()
+        : MNfull[d1.getMonth()]+'–'+MNfull[d2.getMonth()]+' '+d2.getFullYear();
+    } else {
+      periodo='Todo el histórico registrado';
+      tituloMes='histórico';
+    }
+
+    // narrativa sugerida — top categorías y tipos del periodo
+    var catCount={};
+    rows.forEach(function(d){
+      d.categoria.split('/').map(function(x){return x.trim();}).forEach(function(cc){
+        if(cc) catCount[cc]=(catCount[cc]||0)+1;
+      });
+    });
+    var topCat=Object.keys(catCount).sort(function(a,b){return catCount[b]-catCount[a];}).slice(0,4);
+    var topTipo=Object.keys(tipoCount).sort(function(a,b){return tipoCount[b]-tipoCount[a];}).slice(0,3);
+    var sugerida =
+      '• Ejecución de '+(topTipo.join(', ').toLowerCase())+' para las categorías '+topCat.join(', ')+'.\n'+
+      '• Actualización y consolidación de fuentes de información y seguimiento operativo del período.\n'+
+      '• Apoyo analítico y de gestión de datos para las solicitudes registradas por el equipo de México.';
+
+    return {
+      rows:rows, total:rows.length, comp:comp, prog:prog, pend:pend,
+      tipos:tipos, periodo:periodo, tituloMes:tituloMes, sugerida:sugerida
+    };
   }
 
   function calendario(){
@@ -1667,7 +1847,8 @@ function App(){
         isAdmin&&h('button',{style:sb('dashboard'),onClick:function(){setView('dashboard');}},'📊 Dashboard'),
         h('div',{style:{width:1,height:24,background:'rgba(255,255,255,.25)',margin:'0 4px'}}),
         h('button',{onClick:reload,style:{padding:'7px 14px',borderRadius:8,background:'rgba(255,255,255,.1)',color:'#fff',border:'1px solid rgba(255,255,255,.25)',cursor:'pointer',fontSize:12,fontWeight:600}},'🔄 Sincronizar'),
-        isAdmin&&h('button',{onClick:function(){window.print();},style:{padding:'7px 14px',borderRadius:8,background:'rgba(255,255,255,.1)',color:'#fff',border:'1px solid rgba(255,255,255,.25)',cursor:'pointer',fontSize:12,fontWeight:600}},'🖨 Exportar PDF'),
+        isAdmin&&h('button',{onClick:function(){document.body.classList.remove('print-orden');window.print();},style:{padding:'7px 14px',borderRadius:8,background:'rgba(255,255,255,.1)',color:'#fff',border:'1px solid rgba(255,255,255,.25)',cursor:'pointer',fontSize:12,fontWeight:600}},'🖨 Exportar PDF'),
+        isAdmin&&h('button',{onClick:function(){setOrdenNarr(ordenData().sugerida);setShowOrden(true);},style:{padding:'7px 14px',borderRadius:8,background:'rgba(255,255,255,.1)',color:'#fff',border:'1px solid rgba(255,255,255,.25)',cursor:'pointer',fontSize:12,fontWeight:600}},'📄 Orden de Trabajo'),
         h('button',{onClick:function(){setShowNew(true);},style:{padding:'7px 16px',borderRadius:8,background:'#1B4B7F',color:'#fff',border:'none',cursor:'pointer',fontSize:12,fontWeight:700}},'+ Nueva'))),
     // Filters - two rows
     h('div',{style:{background:'#fff',borderBottom:'1px solid #DDE2E8'}},
@@ -1712,6 +1893,18 @@ function App(){
     showNew&&h(NewModal,{onClose:function(){setShowNew(false);},onAdd:addItem,nextId:nextId}),
     // Toast
     isAdmin&&h(Reporte,{data:repData(),filtros:repFiltros()}),
+    isAdmin&&showOrden&&h(OrdenModal,{
+      narrativaInicial:ordenNarr,
+      onClose:function(){setShowOrden(false);},
+      onGenerar:function(narr,valor){
+        setOrdenNarr(narr); setOrdenValor(valor); setShowOrden(false);
+        setTimeout(function(){
+          document.body.classList.add('print-orden');
+          window.print();
+          setTimeout(function(){document.body.classList.remove('print-orden');},500);
+        },50);
+      }}),
+    isAdmin&&h(OrdenTrabajo,{data:ordenData(),narrativa:ordenNarr,valor:ordenValor||'MXN$ 0.00 (no incluye IVA)'}),
     toast&&h('div',{style:{position:'fixed',bottom:24,right:24,background:toast.type==='err'?'#A81E2D':KG,color:'#fff',padding:'12px 20px',borderRadius:10,fontSize:13,fontWeight:600,boxShadow:'0 4px 16px rgba(0,0,0,.2)',zIndex:2000,animation:'fi 0.2s',maxWidth:360}},toast.msg));
 }
 
