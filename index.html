@@ -240,7 +240,7 @@ function parseRows(rows){
   return rows.map(function(r,i){
     var keys=Object.keys(r);
     function find(){for(var a=0;a<arguments.length;a++){var c=arguments[a];var k=keys.find(function(k){return k.toLowerCase().indexOf(c.toLowerCase())!==-1;});if(k!==undefined)return r[k];}return '';}
-    return {id:Number(find('#','id','num')||i+1),semana:String(find('semana','week')||'Sem 1'),fecha:String(find('fecha sol','fecha_sol')||''),pais:String(find('país','pais','country')||'Colombia'),categoria:String(find('categor')||'Baby'),solicitud:String(find('entregable','solicitud / entregable')||''),tipo:String(find('tipo','type')||'Análisis'),champion:String(find('champion','responsable','owner')||''),prioridad:String(find('prioridad','priority')||'Media'),esfuerzo:Number(find('esfuerzo','hrs','horas','effort')||0),fechaLimite:String(find('fecha l','deadline','vencimiento','limite')||''),estado:String(find('estado','status','estatus')||'Pendiente'),avance:Number(String(find('avance','progreso','porcentaje')).replace('%','')||0),comentarios:String(find('comentario','nota','comment')||'')};
+    return {id:Number(find('#','id','num')||i+1),semana:String(find('semana','week')||'Sem 1'),fecha:String(find('fecha sol','fecha_sol')||''),pais:String(find('país','pais','country')||'Colombia'),categoria:String(find('categor')||'Baby'),solicitud:String(find('entregable','solicitud / entregable')||''),tipo:String(find('tipo','type')||'Análisis'),champion:String(find('champion','responsable','owner')||''),prioridad:String(find('prioridad','priority')||'Media'),esfuerzo:Number(find('esfuerzo','hrs','horas','effort')||0),fechaLimite:String(find('fecha l','deadline','vencimiento','limite')||''),estado:String(find('estado','status','estatus')||'Pendiente'),avance:Number(String(find('avance','progreso','porcentaje')).replace('%','')||0),comentarios:String(find('comentario','nota','comment')||''),orden:Number(find('orden','order')||(i+1)*10)};
   }).filter(function(r){return r.solicitud&&r.solicitud.trim()!=='';});
 }
 function parseComentarios(rows){
@@ -274,9 +274,9 @@ async function writeSP(data,comentariosArg){
   if(!t) throw new Error('No se pudo obtener token');
   console.log('Guardando en SharePoint... driveId='+driveId+' fileId='+fileId);
   var wb=XLSX.utils.book_new();
-  var rows=data.map(function(d){return {'#':d.id,'Semana':d.semana,'Fecha Solicitud':d.fecha,'País':d.pais,'Categoría':d.categoria,'Solicitud / Entregable':d.solicitud,'Tipo':d.tipo,'Champion Interno':d.champion,'Prioridad':d.prioridad,'Esfuerzo (hrs)':d.esfuerzo,'Fecha Límite':d.fechaLimite,'Estado':d.estado,'% Avance':d.avance,'Comentarios':d.comentarios};});
+  var rows=data.map(function(d){return {'#':d.id,'Semana':d.semana,'Fecha Solicitud':d.fecha,'País':d.pais,'Categoría':d.categoria,'Solicitud / Entregable':d.solicitud,'Tipo':d.tipo,'Champion Interno':d.champion,'Prioridad':d.prioridad,'Esfuerzo (hrs)':d.esfuerzo,'Fecha Límite':d.fechaLimite,'Estado':d.estado,'% Avance':d.avance,'Comentarios':d.comentarios,'Orden':d.orden};});
   var ws=XLSX.utils.json_to_sheet(rows);
-  ws['!cols']=[4,8,14,10,18,45,12,18,10,10,12,12,10,30].map(function(w){return {wch:w};});
+  ws['!cols']=[4,8,14,10,18,45,12,18,10,10,12,12,10,30,8].map(function(w){return {wch:w};});
   XLSX.utils.book_append_sheet(wb,ws,'Tráfico General');
 
   var coms = comentariosArg || [];
@@ -319,7 +319,10 @@ function KCard(p){
     onMouseEnter:function(e){e.currentTarget.style.boxShadow='0 6px 20px rgba(0,0,0,.12)';},
     onMouseLeave:function(e){e.currentTarget.style.boxShadow='0 2px 6px rgba(0,0,0,.05)';}},
     h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:8,gap:8}},
-      h('div',{style:{fontSize:12,fontWeight:700,color:KG,lineHeight:1.4,flex:1}},item.solicitud),
+      h('div',{style:{display:'flex',alignItems:'flex-start',gap:6,flex:1}},
+        p.editadoReciente&&h('span',{title:'Editado en las últimas 24h',style:{width:7,height:7,minWidth:7,
+          borderRadius:'50%',background:'#B8721A',marginTop:5,flexShrink:0}}),
+        h('div',{style:{fontSize:12,fontWeight:700,color:KG,lineHeight:1.4}},item.solicitud)),
       h(Badge,{color:pm.color,bg:pm.bg,small:true},item.prioridad)),
     h('div',{style:{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}},
       h(PaisChip,{pais:item.pais}),
@@ -406,12 +409,28 @@ function fechaRelativa(fechaStr){
   return d.getDate()+' '+MN[d.getMonth()]+', '+hora;
 }
 
+// Mapa tareaId → true si tuvo un comentario o cambio en las últimas 24h.
+function mapaEditadoReciente(comentarios){
+  var mapa={}, ahora=new Date(), limite=24*60*60*1000;
+  comentarios.forEach(function(cm){
+    var d=new Date(cm.fecha);
+    if(isNaN(d)) return;
+    if(ahora-d<=limite) mapa[cm.tareaId]=true;
+  });
+  return mapa;
+}
+
 function ComentariosPanel(p){
   var [texto,setTexto]=useState('');
   var [enviando,setEnviando]=useState(false);
+  var [tab,setTab]=useState('todo'); // 'todo' | 'comentarios' | 'cambios'
   var lista = p.comentarios.filter(function(c){return c.tareaId===p.tareaId;})
     .sort(function(a,b){return new Date(b.fecha)-new Date(a.fecha);});
   var numComentarios = lista.filter(function(c){return c.tipo!=='cambio';}).length;
+  var numCambios = lista.filter(function(c){return c.tipo==='cambio';}).length;
+  var listaFiltrada = tab==='todo' ? lista
+    : tab==='comentarios' ? lista.filter(function(c){return c.tipo!=='cambio';})
+    : lista.filter(function(c){return c.tipo==='cambio';});
 
   function enviar(){
     var t=texto.trim();
@@ -420,17 +439,31 @@ function ComentariosPanel(p){
     p.onAdd(t).then(function(){setTexto('');setEnviando(false);});
   }
 
+  function Tab(v,label,n){
+    var act=tab===v;
+    return h('button',{onClick:function(){setTab(v);},style:{padding:'4px 10px',borderRadius:14,
+      border:'1px solid '+(act?'#1B4B7F':'#DDE2E8'),background:act?'#1B4B7F':'#fff',
+      color:act?'#fff':'#66717F',fontSize:10.5,fontWeight:700,cursor:'pointer'}},
+      label+(n!==undefined?' ('+n+')':''));
+  }
+
   return h('div',{style:{marginTop:22,paddingTop:18,borderTop:'1px solid #DDE2E8'}},
-    h('div',{style:{fontSize:12,fontWeight:700,color:'#0A0E14',marginBottom:12,
-      display:'flex',alignItems:'center',gap:6}},
-      '💬 Actividad',
-      h('span',{style:{fontSize:11,fontWeight:400,color:'#66717F'}},'('+numComentarios+' comentario'+(numComentarios===1?'':'s')+')')),
+    h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',
+      marginBottom:12,flexWrap:'wrap',gap:8}},
+      h('div',{style:{fontSize:12,fontWeight:700,color:'#0A0E14',display:'flex',
+        alignItems:'center',gap:6}},
+        '💬 Actividad',
+        h('span',{style:{fontSize:11,fontWeight:400,color:'#66717F'}},'('+numComentarios+' comentario'+(numComentarios===1?'':'s')+')')),
+      h('div',{style:{display:'flex',gap:5}},
+        Tab('todo','Todo',lista.length),
+        Tab('comentarios','Comentarios',numComentarios),
+        Tab('cambios','Cambios',numCambios))),
     h('div',{style:{display:'flex',flexDirection:'column',gap:10,maxHeight:240,
       overflowY:'auto',marginBottom:12,paddingRight:4}},
-      lista.length===0
+      listaFiltrada.length===0
         ? h('div',{style:{fontSize:12,color:'#9BA5B1',textAlign:'center',padding:'12px 0'}},
-            'Sin actividad todavía.')
-        : lista.map(function(cm){
+            tab==='todo'?'Sin actividad todavía.':tab==='comentarios'?'Sin comentarios todavía.':'Sin cambios registrados todavía.')
+        : listaFiltrada.map(function(cm){
             if(cm.tipo==='cambio'){
               return h('div',{key:cm.id,style:{display:'flex',alignItems:'center',gap:8,
                 background:'#F4F6F8',borderRadius:6,padding:'6px 10px'}},
@@ -490,7 +523,7 @@ function EditModal(p){
 }
 
 function NewModal(p){
-  var [form,setForm]=useState({id:p.nextId,semana:'Sem 1',fecha:new Date().toLocaleDateString('es-CO'),pais:'Colombia',categoria:'',solicitud:'',tipo:'Análisis',champion:'David Rodríguez',prioridad:'Media',esfuerzo:4,fechaLimite:'',estado:'Pendiente',avance:0,comentarios:''});
+  var [form,setForm]=useState({id:p.nextId,semana:'Sem 1',fecha:new Date().toLocaleDateString('es-CO'),pais:'Colombia',categoria:'',solicitud:'',tipo:'Análisis',champion:'David Rodríguez',prioridad:'Media',esfuerzo:4,fechaLimite:'',estado:'Pendiente',avance:0,comentarios:'',orden:Date.now()});
   function set(k,v){setForm(function(f){return Object.assign({},f,{[k]:v});});}
   var ok=form.solicitud.trim().length>3&&form.fechaLimite;
   return h('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:16},onClick:function(e){if(e.target===e.currentTarget)p.onClose();}},
@@ -875,6 +908,7 @@ function App(){
   var [comentarios,setComentarios]=useState([]);
   var [dragId,setDragId]=useState(null);
   var [dragOver,setDragOver]=useState(null);
+  var [dragOverCard,setDragOverCard]=useState(null);
   var [showOrden,setShowOrden]=useState(false);
   var [ordenPais,setOrdenPais]=useState('México');
   var [ordenNarr,setOrdenNarr]=useState('');
@@ -1486,6 +1520,7 @@ function App(){
   function miTrabajo(){
     var n=miNombre();
     var mias=data.filter(esMio);
+    var mapaReciente = mapaEditadoReciente(comentarios);
     if(!n) return h('div',{style:{background:'#fff',border:'1px solid #DDE2E8',borderRadius:6,
       padding:'60px 24px',textAlign:'center'}},
       h('div',{style:{fontSize:36,marginBottom:10}},'👤'),
@@ -1527,6 +1562,7 @@ function App(){
             h('div',{style:{display:'flex',flexDirection:'column',gap:10,minHeight:60}},
               cards.map(function(item){return h(KCard,{key:item.id,item:item,onClick:setSel,
                 numComentarios:comentarios.filter(function(cm){return cm.tareaId===item.id&&cm.tipo!=='cambio';}).length,
+                editadoReciente:!!mapaReciente[item.id],
                 draggable:true,dragging:dragId===item.id,
                 onDragStart:function(id){setDragId(id);},
                 onDragEnd:function(){setDragId(null);setDragOver(null);}});}),
@@ -1536,25 +1572,50 @@ function App(){
   }
 
   function kanban(){
-    function onDropEstado(estado){
+    var mapaReciente = mapaEditadoReciente(comentarios);
+
+    function onDropEstado(estado,antesDeId){
       if(!dragId)return;
       var item=data.find(function(d){return d.id===dragId;});
-      if(!item||item.estado===estado){setDragId(null);setDragOver(null);return;}
+      if(!item){setDragId(null);setDragOver(null);setDragOverCard(null);return;}
+
+      var mismoEstado = item.estado===estado;
       var avance=item.avance;
-      if(estado==='Completado') avance=100;
-      else if(item.estado==='Completado'&&estado==='Pendiente') avance=0;
-      var nu=Object.assign({},item,{estado:estado,avance:avance});
+      if(!mismoEstado){
+        if(estado==='Completado') avance=100;
+        else if(item.estado==='Completado'&&estado==='Pendiente') avance=0;
+      }
+
+      // Calcular nuevo orden: insertar antes de 'antesDeId' dentro de esa columna
+      var colCards=filtered.filter(function(d){return d.estado===estado&&d.id!==dragId;})
+        .sort(function(a,b){return a.orden-b.orden;});
+      var nuevoOrden;
+      if(antesDeId==null){
+        // soltado al final de la columna
+        nuevoOrden = colCards.length ? colCards[colCards.length-1].orden+10 : 10;
+      }else{
+        var idx=colCards.findIndex(function(c){return c.id===antesDeId;});
+        var anterior = idx>0 ? colCards[idx-1].orden : 0;
+        var siguiente = colCards[idx] ? colCards[idx].orden : anterior+20;
+        nuevoOrden = (anterior+siguiente)/2;
+      }
+
+      if(mismoEstado && item.orden===nuevoOrden){setDragId(null);setDragOver(null);setDragOverCard(null);return;}
+      var nu=Object.assign({},item,{estado:estado,avance:avance,orden:nuevoOrden});
       updateItem(nu,item);
-      setDragId(null); setDragOver(null);
+      setDragId(null); setDragOver(null); setDragOverCard(null);
     }
+
     return h('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}},
       ESTADOS.map(function(estado){
-        var cards=filtered.filter(function(d){return d.estado===estado;}), sm=SM[estado];
+        var cards=filtered.filter(function(d){return d.estado===estado;})
+          .sort(function(a,b){return a.orden-b.orden;});
+        var sm=SM[estado];
         var over=dragOver===estado;
         return h('div',{key:estado,
-          onDragOver:function(e){e.preventDefault();if(dragId)setDragOver(estado);},
+          onDragOver:function(e){e.preventDefault();if(dragId&&dragOver!==estado)setDragOver(estado);},
           onDragLeave:function(){if(dragOver===estado)setDragOver(null);},
-          onDrop:function(e){e.preventDefault();onDropEstado(estado);},
+          onDrop:function(e){e.preventDefault();onDropEstado(estado,dragOverCard);},
           style:{background:over?'#E4ECF4':'#EDF1F5',borderRadius:14,padding:14,
             border:'2px dashed '+(over?'#1B4B7F':'transparent'),transition:'background .12s,border-color .12s'}},
           h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}},
@@ -1563,11 +1624,22 @@ function App(){
               h('span',{style:{fontSize:11,fontWeight:800,color:'#333',textTransform:'uppercase',letterSpacing:'0.5px'}},estado)),
             h('span',{style:{fontSize:11,fontWeight:700,color:'#fff',background:sm.dot,borderRadius:20,padding:'2px 9px'}},cards.length)),
           h('div',{style:{display:'flex',flexDirection:'column',gap:10,minHeight:60}},
-            cards.map(function(item){return h(KCard,{key:item.id,item:item,onClick:setSel,
-              numComentarios:comentarios.filter(function(cm){return cm.tareaId===item.id&&cm.tipo!=='cambio';}).length,
-              draggable:true,dragging:dragId===item.id,
-              onDragStart:function(id){setDragId(id);},
-              onDragEnd:function(){setDragId(null);setDragOver(null);}});}),
+            cards.map(function(item){
+              var mostrarLineaArriba = dragId&&dragId!==item.id&&dragOverCard===item.id;
+              return h('div',{key:item.id},
+                mostrarLineaArriba&&h('div',{style:{height:3,background:'#1B4B7F',borderRadius:2,marginBottom:6}}),
+                h('div',{
+                  onDragOver:function(e){e.preventDefault();e.stopPropagation();
+                    if(dragId&&dragId!==item.id&&dragOverCard!==item.id)setDragOverCard(item.id);
+                    if(dragOver!==estado)setDragOver(estado);
+                  }},
+                  h(KCard,{item:item,onClick:setSel,
+                    numComentarios:comentarios.filter(function(cm){return cm.tareaId===item.id&&cm.tipo!=='cambio';}).length,
+                    editadoReciente:!!mapaReciente[item.id],
+                    draggable:true,dragging:dragId===item.id,
+                    onDragStart:function(id){setDragId(id);},
+                    onDragEnd:function(){setDragId(null);setDragOver(null);setDragOverCard(null);}})));
+            }),
             cards.length===0&&h('div',{style:{textAlign:'center',color:over?'#1B4B7F':'#BBB',fontSize:12,padding:'20px 0'}},
               over?'Soltar aquí':'Sin solicitudes')));
       }));
