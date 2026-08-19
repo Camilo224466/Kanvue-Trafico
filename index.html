@@ -474,7 +474,7 @@ function EditModal(p){
           h(PBar,{value:form.avance,color:sm.dot}))),
       h('div',{style:{marginTop:14}},h(FG,{label:'Nota interna (campo original del Excel)'},h('textarea',{value:form.comentarios,onChange:function(e){set('comentarios',e.target.value);},rows:2,style:Object.assign({},INP,{resize:'vertical'})}))),
       h('div',{style:{display:'flex',gap:10,marginTop:20}},
-        h('button',{onClick:function(){p.onSave(form);p.onClose();},style:{flex:1,padding:'11px',background:KG,color:'#fff',border:'none',borderRadius:10,fontWeight:700,fontSize:13,cursor:'pointer'}},'💾 Guardar en SharePoint'),
+        h('button',{onClick:function(){p.onSave(form,p.item);p.onClose();},style:{flex:1,padding:'11px',background:KG,color:'#fff',border:'none',borderRadius:10,fontWeight:700,fontSize:13,cursor:'pointer'}},'💾 Guardar en SharePoint'),
         h('button',{onClick:p.onClose,style:{padding:'11px 20px',background:'#F4F6F8',color:'#555',border:'none',borderRadius:10,fontWeight:600,fontSize:13,cursor:'pointer'}},'Cancelar')),
       h(ComentariosPanel,{tareaId:form.id,comentarios:p.comentarios,onAdd:function(texto){return p.onAddComment(form.id,texto);}})));
 }
@@ -897,18 +897,78 @@ function App(){
     })();
   },[]);
 
-  async function save(nd,coms){setSaving(true);try{await writeSP(nd,coms!==undefined?coms:comentarios);showToast('✅ Guardado en SharePoint');}catch(e){showToast('❌ '+e.message,'err');}finally{setSaving(false);}}
-  async function updateItem(u){var nd=data.map(function(x){return x.id===u.id?u:x;});setData(nd);await save(nd);}
-  async function addItem(item){var nd=data.concat([item]);setData(nd);await save(nd);}
+  // ── Guardado con relectura + fusión (evita perder cambios en paralelo) ─────
+  var CAMPOS_TAREA=['pais','categoria','solicitud','tipo','champion','prioridad',
+    'esfuerzo','fechaLimite','estado','avance','comentarios','semana','fecha'];
+
+  // Fusiona: parte de lo que hay AHORA en SharePoint, y sobre eso aplica
+  // únicamente los campos que el usuario cambió respecto al "antes" que tenía.
+  function fusionarTarea(tareasFrescas,antes,editado){
+    var actual=tareasFrescas.find(function(x){return x.id===editado.id;});
+    if(!actual) return tareasFrescas.concat([editado]); // la borraron: la re-agregamos
+    var fusion=Object.assign({},actual);
+    CAMPOS_TAREA.forEach(function(campo){
+      if(antes[campo]!==editado[campo]) fusion[campo]=editado[campo];
+    });
+    return tareasFrescas.map(function(x){return x.id===editado.id?fusion:x;});
+  }
+
+  async function save(nd,coms){
+    setSaving(true);
+    try{
+      await writeSP(nd,coms!==undefined?coms:comentarios);
+      showToast('✅ Guardado en SharePoint');
+    }catch(e){ showToast('❌ '+e.message,'err'); }
+    finally{ setSaving(false); }
+  }
+
+  // updateItem: relee lo que hay en SharePoint AHORA, fusiona solo los campos
+  // que este usuario tocó (antes vs editado), y guarda esa versión fusionada.
+  async function updateItem(editado,antes){
+    setSaving(true);
+    try{
+      var sp=await readSP();
+      var ndFresco = antes ? fusionarTarea(sp.tareas,antes,editado)
+                            : sp.tareas.map(function(x){return x.id===editado.id?editado:x;});
+      setData(ndFresco);
+      setComentarios(sp.comentarios);
+      await writeSP(ndFresco,sp.comentarios);
+      showToast('✅ Guardado en SharePoint');
+    }catch(e){ showToast('❌ '+e.message,'err'); }
+    finally{ setSaving(false); }
+  }
+
+  // addItem: no hay conflicto posible (fila nueva) — solo anexa sobre lo fresco.
+  async function addItem(item){
+    setSaving(true);
+    try{
+      var sp=await readSP();
+      var nd=sp.tareas.concat([item]);
+      setData(nd);
+      setComentarios(sp.comentarios);
+      await writeSP(nd,sp.comentarios);
+      showToast('✅ Guardado en SharePoint');
+    }catch(e){ showToast('❌ '+e.message,'err'); }
+    finally{ setSaving(false); }
+  }
+
+  // addComment: relee para no pisar tareas cambiadas por otros, solo agrega el comentario.
   async function addComment(tareaId,texto){
     var email=(user&&(user.username||user.mail))||'';
     var nombre=(user&&user.name)?user.name.split(' ').slice(0,2).join(' '):email;
     var now=new Date();
     var fechaStr=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0')+'T'+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
     var nuevo={id:'c'+Date.now()+Math.random().toString(36).slice(2,6),tareaId:tareaId,fecha:fechaStr,usuario:nombre,texto:texto};
-    var nc=comentarios.concat([nuevo]);
-    setComentarios(nc);
-    await save(data,nc);
+    setSaving(true);
+    try{
+      var sp=await readSP();
+      var nc=sp.comentarios.concat([nuevo]);
+      setData(sp.tareas);
+      setComentarios(nc);
+      await writeSP(sp.tareas,nc);
+      showToast('✅ Guardado en SharePoint');
+    }catch(e){ showToast('❌ '+e.message,'err'); }
+    finally{ setSaving(false); }
   }
   async function reload(){setStatus('loading');try{var sp=await readSP();setData(sp.tareas);setComentarios(sp.comentarios);setStatus('ready');showToast('✅ '+sp.tareas.length+' actualizadas');}catch(e){showToast('❌ '+e.message,'err');setStatus('ready');}}
 
@@ -1402,7 +1462,7 @@ function App(){
       var avance=item.avance;
       if(estado==='Completado') avance=100;
       else if(item.estado==='Completado'&&estado==='Pendiente') avance=0;
-      updateItem(Object.assign({},item,{estado:estado,avance:avance}));
+      updateItem(Object.assign({},item,{estado:estado,avance:avance}),item);
       setDragId(null); setDragOver(null);
     }
 
@@ -1444,7 +1504,7 @@ function App(){
       if(estado==='Completado') avance=100;
       else if(item.estado==='Completado'&&estado==='Pendiente') avance=0;
       var nu=Object.assign({},item,{estado:estado,avance:avance});
-      updateItem(nu);
+      updateItem(nu,item);
       setDragId(null); setDragOver(null);
     }
     return h('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}},
