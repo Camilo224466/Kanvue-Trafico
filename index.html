@@ -244,7 +244,7 @@ function parseRows(rows){
   return rows.map(function(r,i){
     var keys=Object.keys(r);
     function find(){for(var a=0;a<arguments.length;a++){var c=arguments[a];var k=keys.find(function(k){return k.toLowerCase().indexOf(c.toLowerCase())!==-1;});if(k!==undefined)return r[k];}return '';}
-    return {id:Number(find('#','id','num')||i+1),semana:String(find('semana','week')||'Sem 1'),fecha:String(find('fecha sol','fecha_sol')||''),pais:String(find('país','pais','country')||'Colombia'),categoria:String(find('categor')||'Baby'),solicitud:String(find('entregable','solicitud / entregable')||''),tipo:String(find('tipo','type')||'Análisis'),champion:String(find('champion','responsable','owner')||''),prioridad:String(find('prioridad','priority')||'Media'),esfuerzo:Number(find('esfuerzo','hrs','horas','effort')||0),fechaLimite:String(find('fecha l','deadline','vencimiento','limite')||''),estado:String(find('estado','status','estatus')||'Pendiente'),avance:Number(String(find('avance','progreso','porcentaje')).replace('%','')||0),comentarios:String(find('comentario','nota','comment')||''),orden:Number(find('orden','order')||(i+1)*10),bloqueada:String(find('bloqueada','blocked')||'').toLowerCase()==='si'||String(find('bloqueada','blocked')||'').toLowerCase()==='sí'||String(find('bloqueada','blocked')||'').toLowerCase()==='true',motivoBloqueo:String(find('motivo bloqueo','motivo','blocked reason')||'')};
+    return {id:Number(find('#','id','num')||i+1),semana:String(find('semana','week')||'Sem 1'),fecha:String(find('fecha sol','fecha_sol')||''),pais:String(find('país','pais','country')||'Colombia'),categoria:String(find('categor')||'Baby'),solicitud:String(find('entregable','solicitud / entregable')||''),tipo:String(find('tipo','type')||'Análisis'),champion:String(find('champion','responsable','owner')||''),prioridad:String(find('prioridad','priority')||'Media'),esfuerzo:Number(find('esfuerzo','hrs','horas','effort')||0),fechaLimite:String(find('fecha l','deadline','vencimiento','limite')||''),estado:String(find('estado','status','estatus')||'Pendiente'),avance:Number(String(find('avance','progreso','porcentaje')).replace('%','')||0),comentarios:String(find('comentario','nota','comment')||''),orden:Number(find('orden','order')||(i+1)*10),bloqueada:String(find('bloqueada','blocked')||'').toLowerCase()==='si'||String(find('bloqueada','blocked')||'').toLowerCase()==='sí'||String(find('bloqueada','blocked')||'').toLowerCase()==='true',motivoBloqueo:String(find('motivo bloqueo','motivo','blocked reason')||''),responsableRetraso:String(find('retraso culpa','delay owner')||''),motivoRetraso:String(find('retraso motivo','delay reason')||'')};
   }).filter(function(r){return r.solicitud&&r.solicitud.trim()!=='';});
 }
 function parseComentarios(rows){
@@ -310,9 +310,9 @@ async function writeSP(data,comentariosArg){
   if(!t) throw new Error('No se pudo obtener token');
   console.log('Guardando en SharePoint... driveId='+driveId+' fileId='+fileId);
   var wb=XLSX.utils.book_new();
-  var rows=data.map(function(d){return {'#':d.id,'Semana':d.semana,'Fecha Solicitud':d.fecha,'País':d.pais,'Categoría':d.categoria,'Solicitud / Entregable':d.solicitud,'Tipo':d.tipo,'Champion Interno':d.champion,'Prioridad':d.prioridad,'Esfuerzo (hrs)':d.esfuerzo,'Fecha Límite':d.fechaLimite,'Estado':d.estado,'% Avance':d.avance,'Comentarios':d.comentarios,'Orden':d.orden,'Bloqueada':d.bloqueada?'Sí':'No','Motivo Bloqueo':d.motivoBloqueo||''};});
+  var rows=data.map(function(d){return {'#':d.id,'Semana':d.semana,'Fecha Solicitud':d.fecha,'País':d.pais,'Categoría':d.categoria,'Solicitud / Entregable':d.solicitud,'Tipo':d.tipo,'Champion Interno':d.champion,'Prioridad':d.prioridad,'Esfuerzo (hrs)':d.esfuerzo,'Fecha Límite':d.fechaLimite,'Estado':d.estado,'% Avance':d.avance,'Comentarios':d.comentarios,'Orden':d.orden,'Bloqueada':d.bloqueada?'Sí':'No','Motivo Bloqueo':d.motivoBloqueo||'','Retraso Culpa':d.responsableRetraso||'','Retraso Motivo':d.motivoRetraso||''};});
   var ws=XLSX.utils.json_to_sheet(rows);
-  ws['!cols']=[4,8,14,10,18,45,12,18,10,10,12,12,10,30,8,10,30].map(function(w){return {wch:w};});
+  ws['!cols']=[4,8,14,10,18,45,12,18,10,10,12,12,10,30,8,10,30,14,30].map(function(w){return {wch:w};});
   XLSX.utils.book_append_sheet(wb,ws,'Tráfico General');
 
   var coms = comentariosArg || [];
@@ -440,6 +440,40 @@ function Sel(p){return h('select',{value:p.value,onChange:function(e){p.onChange
             h('span',{style:{fontSize:12,color:'#333'}},c));
         })));
   }
+
+// Parser de fechas mixtas (dd/mm/aaaa y aaaa-mm-dd), reutilizado en todo el
+// código para vencimientos, calendario, reparto de horas y ahora OT/OTIF.
+function pFechaGlobal(s){
+  if(!s) return null;
+  var t=String(s).trim(), m;
+  if((m=t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return new Date(+m[1],+m[2]-1,+m[3]);
+  if((m=t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/))) return new Date(+m[3],+m[2]-1,+m[1]);
+  var d=new Date(t); return isNaN(d)?null:d;
+}
+
+// No existe un campo de "fecha de cierre real" — solo Fecha Límite y Estado.
+// Por eso el estado OT de una tarea se clasifica en TRES valores, no dos:
+//   'ot'        → verificable como a tiempo (abierta, aún no vence)
+//   'no_ot'     → verificable como fuera de tiempo (abierta y vencida, o sin
+//                 fecha límite válida)
+//   'sin_dato'  → completada, pero sin fecha de cierre real no se puede saber
+//                 si se cerró a tiempo o tarde — no se fuerza a "sí"
+// El % de On Time del dashboard se calcula solo sobre 'ot'+'no_ot' (lo
+// verificable), dejando 'sin_dato' fuera del numerador y del denominador,
+// pero visible aparte para que no se pierda de vista cuánto no se puede medir.
+function estadoOT(item){
+  var lim=pFechaGlobal(item.fechaLimite);
+  if(!lim) return 'no_ot';
+  if(item.estado==='Completado') return 'sin_dato';
+  var hoy=new Date(); hoy.setHours(0,0,0,0);
+  lim.setHours(0,0,0,0);
+  return hoy<=lim ? 'ot' : 'no_ot';
+}
+// In Full: se completó al 100% de avance — único dato de OTIF verificable
+// con certeza hoy, sin depender de una fecha de cierre que no existe.
+function esInFull(item){
+  return item.estado==='Completado' && item.avance===100;
+}
 
 function fechaRelativa(fechaStr){
   var d=new Date(fechaStr);
@@ -575,6 +609,22 @@ function EditModal(p){
           onChange:function(e){set('motivoBloqueo',e.target.value);},
           placeholder:'¿Por qué está bloqueada? (ej: esperando acceso, respuesta de X)',rows:2,
           style:Object.assign({},INP,{resize:'vertical',marginTop:8,background:'#fff'})})),
+      p.isAdmin&&estadoOT(form)==='no_ot'&&h('div',{style:{marginTop:14,background:'#F4F6F8',
+        borderRadius:8,padding:'10px 12px',border:'1px solid #DDE2E8'}},
+        h('div',{style:{fontSize:12,fontWeight:700,color:'#A81E2D',marginBottom:8}},
+          '⏱ Fuera de tiempo — justificar retraso'),
+        h('div',{style:{display:'flex',gap:6,marginBottom:8}},
+          ['RETAILATAM','Kenvue','Otro'].map(function(r){
+            var act=form.responsableRetraso===r;
+            return h('button',{key:r,onClick:function(){set('responsableRetraso',r);},
+              style:{flex:1,padding:'6px 10px',borderRadius:6,border:'1px solid '+(act?'#1B4B7F':'#DDE2E8'),
+                background:act?'#1B4B7F':'#fff',color:act?'#fff':'#3A4553',fontSize:11,
+                fontWeight:700,cursor:'pointer'}},r);
+          })),
+        h('textarea',{value:form.motivoRetraso,
+          onChange:function(e){set('motivoRetraso',e.target.value);},
+          placeholder:'¿Por qué se retrasó? (ej: cliente no entregó insumos a tiempo)',rows:2,
+          style:Object.assign({},INP,{resize:'vertical',background:'#fff'})})),
       h('div',{style:{marginTop:14}},h(FG,{label:'Nota interna (campo original del Excel)'},h('textarea',{value:form.comentarios,onChange:function(e){set('comentarios',e.target.value);},rows:2,style:Object.assign({},INP,{resize:'vertical'})}))),
       h('div',{style:{display:'flex',gap:10,marginTop:20}},
         h('button',{onClick:function(){p.onSave(form,p.item);p.onClose();},style:{flex:1,padding:'11px',background:KG,color:'#fff',border:'none',borderRadius:10,fontWeight:700,fontSize:13,cursor:'pointer'}},'💾 Guardar en SharePoint'),
@@ -583,7 +633,7 @@ function EditModal(p){
 }
 
 function NewModal(p){
-  var [form,setForm]=useState({id:p.nextId,semana:'Sem 1',fecha:new Date().toLocaleDateString('es-CO'),pais:'Colombia',categoria:'',solicitud:'',tipo:'Análisis',champion:'David Rodríguez',prioridad:'Media',esfuerzo:4,fechaLimite:'',estado:'Pendiente',avance:0,comentarios:'',orden:Date.now(),bloqueada:false,motivoBloqueo:''});
+  var [form,setForm]=useState({id:p.nextId,semana:'Sem 1',fecha:new Date().toLocaleDateString('es-CO'),pais:'Colombia',categoria:'',solicitud:'',tipo:'Análisis',champion:'David Rodríguez',prioridad:'Media',esfuerzo:4,fechaLimite:'',estado:'Pendiente',avance:0,comentarios:'',orden:Date.now(),bloqueada:false,motivoBloqueo:'',responsableRetraso:'',motivoRetraso:''});
   function set(k,v){setForm(function(f){return Object.assign({},f,{[k]:v});});}
   var ok=form.solicitud.trim().length>3&&form.fechaLimite;
   return h('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:16},onClick:function(e){if(e.target===e.currentTarget)p.onClose();}},
@@ -1008,7 +1058,7 @@ function App(){
   // ── Guardado con relectura + fusión (evita perder cambios en paralelo) ─────
   var CAMPOS_TAREA=['pais','categoria','solicitud','tipo','champion','prioridad',
     'esfuerzo','fechaLimite','estado','avance','comentarios','semana','fecha',
-    'orden','bloqueada','motivoBloqueo'];
+    'orden','bloqueada','motivoBloqueo','responsableRetraso','motivoRetraso'];
 
   // Fusiona: parte de lo que hay AHORA en SharePoint, y sobre eso aplica
   // únicamente los campos que el usuario cambió respecto al "antes" que tenía.
@@ -2492,9 +2542,75 @@ var proms=filtradas.filter(function(e){return e.nps>=5;}).length;
                 pct+'% de lo prometido esta semana ya se entregó')));
     }
 
+    // ── OTIF — On Time / In Full ────────────────────────────────────────────────
+    function OtifChart(){
+      var clasif = filtered.map(function(d){return {item:d, ot:estadoOT(d), inFull:esInFull(d)};});
+      var medibles = clasif.filter(function(c){return c.ot!=='sin_dato';});
+      var sinDato = clasif.filter(function(c){return c.ot==='sin_dato';}).length;
+      var otCount = medibles.filter(function(c){return c.ot==='ot';}).length;
+      var pctOT = medibles.length ? Math.round(otCount/medibles.length*100) : 0;
+
+      var completadas = filtered.filter(function(d){return d.estado==='Completado';});
+      var inFullCount = completadas.filter(esInFull).length;
+      var pctIF = completadas.length ? Math.round(inFullCount/completadas.length*100) : 0;
+
+      // OTIF real solo puede calcularse sobre lo medible (no 'sin_dato')
+      var otifCount = medibles.filter(function(c){return c.ot==='ot'&&c.inFull;}).length;
+      var pctOTIF = medibles.length ? Math.round(otifCount/medibles.length*100) : 0;
+
+      var noOT = clasif.filter(function(c){return c.ot==='no_ot';}).map(function(c){return c.item;});
+      var porResp={RETAILATAM:0,Kenvue:0,Otro:0,'Sin justificar':0};
+      noOT.forEach(function(d){
+        var r=d.responsableRetraso;
+        if(r==='RETAILATAM'||r==='Kenvue'||r==='Otro') porResp[r]++;
+        else porResp['Sin justificar']++;
+      });
+      var sinJustificar = noOT.filter(function(d){return !d.responsableRetraso;});
+
+      return h(Card,{pad:'18px 22px',gap:14},
+        h(CT,{label:'OTIF — On Time / In Full'}),
+        h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}},
+          [['On Time',pctOT,JBL,medibles.length+' medibles'],
+           ['In Full',pctIF,JGR,completadas.length+' completadas'],
+           ['OTIF',pctOTIF,JPU,otifCount+' de '+medibles.length]].map(function(x){
+            return h('div',{key:x[0],style:{background:JBG,borderRadius:8,padding:'14px',textAlign:'center'}},
+              h('div',{style:{fontSize:30,fontWeight:800,color:x[2]}},x[1]+'%'),
+              h('div',{style:{fontSize:11,fontWeight:700,color:JTX,marginTop:2}},x[0]),
+              h('div',{style:{fontSize:10,color:JMT,marginTop:2}},x[3]));
+          })),
+        sinDato>0&&h('div',{style:{fontSize:10,color:JMT,background:JBG,borderRadius:6,padding:'6px 10px'}},
+          'ℹ '+sinDato+' tarea'+(sinDato===1?'':'s')+' completada'+(sinDato===1?'':'s')+' sin fecha de cierre registrada — no entra'+(sinDato===1?'':'n')+' al cálculo de On Time.'),
+
+        h('div',{style:{borderTop:'1px solid '+JBR,paddingTop:12}},
+          h('div',{style:{fontSize:11,color:JMT,marginBottom:8}},
+            'Responsable de los '+noOT.length+' retraso'+(noOT.length===1?'':'s')+' detectado'+(noOT.length===1?'':'s')),
+          h('div',{style:{display:'flex',flexDirection:'column',gap:6}},
+            [['RETAILATAM',porResp.RETAILATAM,JRD],['Kenvue',porResp.Kenvue,JOR],
+             ['Otro',porResp.Otro,JPU],['Sin justificar',porResp['Sin justificar'],'#9BA5B1']]
+            .filter(function(x){return x[1]>0;})
+            .map(function(x){
+              var pct=noOT.length?Math.round(x[1]/noOT.length*100):0;
+              return h('div',{key:x[0]},
+                h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:11,marginBottom:2}},
+                  h('span',{style:{color:JMT}},x[0]),h('span',{style:{fontWeight:700,color:x[2]}},x[1]+' ('+pct+'%)')),
+                h('div',{style:{height:5,background:'#EDF1F5',borderRadius:3}},
+                  h('div',{style:{width:pct+'%',height:'100%',background:x[2],borderRadius:3}})));
+            }))),
+
+        sinJustificar.length>0&&h('div',{style:{borderTop:'1px solid '+JBR,paddingTop:10}},
+          h('div',{style:{fontSize:10,color:JMT,marginBottom:6}},
+            'Retrasos sin justificar — abre la tarea y márcalo en el modal'),
+          h('div',{style:{display:'flex',flexDirection:'column',gap:4}},
+            sinJustificar.slice(0,5).map(function(d,i){
+              return h('div',{key:i,style:{fontSize:11,color:JTX,overflow:'hidden',
+                textOverflow:'ellipsis',whiteSpace:'nowrap'}},'• '+d.solicitud);
+            }))));
+    }
+
     // ── LAYOUT ────────────────────────────────────────────────────────────────
     return h('div',{style:{display:'flex',flexDirection:'column',gap:14,background:JBG,padding:'4px 0 24px'}},
       h(KpiStrip,null),
+      h(OtifChart,null),
       h('div',{style:{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12}},
         donutSets.map(function(s,i){
           return h(Donut,{key:i,title:s.title,unit:s.unit,data:s.data});
@@ -2581,7 +2697,7 @@ var proms=filtradas.filter(function(e){return e.nps>=5;}).length;
       view==='dashboard'&&(isAdmin?dashboard():h(SinAcceso,null)),
       view==='encuesta'&&(isAdmin?vistaEncuesta():h(SinAcceso,null))),
     // Modals
-    sel&&h(EditModal,{item:sel,onClose:function(){setSel(null);},onSave:updateItem,comentarios:comentarios,onAddComment:addComment}),
+    sel&&h(EditModal,{item:sel,onClose:function(){setSel(null);},onSave:updateItem,comentarios:comentarios,onAddComment:addComment,isAdmin:isAdmin}),
     showNew&&h(NewModal,{onClose:function(){setShowNew(false);},onAdd:addItem,nextId:nextId}),
     // Toast
     isAdmin&&h(Reporte,{data:repData(),filtros:repFiltros()}),
