@@ -1767,9 +1767,11 @@ function App(){
       h('div',{style:{fontSize:12,color:JMT}},'Pega la hoja "Encuesta" exportada desde Microsoft Forms en el Excel y sincroniza.'));
 
     var total=filtradas.length;
-    var proms=filtradas.filter(function(e){return e.nps>=9;}).length;
-    var pasivos=filtradas.filter(function(e){return e.nps>=7&&e.nps<=8;}).length;
-    var detr=filtradas.filter(function(e){return e.nps<=6;}).length;
+    // La pregunta de recomendación en el Forms real quedó en escala 0-5
+// (no la escala NPS estándar de 0-10). Promotor=5, Pasivo=4, Detractor=0-3.
+var proms=filtradas.filter(function(e){return e.nps>=5;}).length;
+    var pasivos=filtradas.filter(function(e){return e.nps===4;}).length;
+    var detr=filtradas.filter(function(e){return e.nps<=3;}).length;
     var npsScore = total ? Math.round((proms/total-detr/total)*100) : 0;
     function avg(campo){
       var vals=filtradas.map(function(e){return e[campo];}).filter(function(v){return !isNaN(v);});
@@ -1823,7 +1825,7 @@ function App(){
             h('div',{style:{fontSize:52,fontWeight:800,
               color:npsScore>=50?JGR:npsScore>=0?JOR:JRD}},npsScore),
             h('div',{style:{flex:1,display:'flex',flexDirection:'column',gap:6}},
-              [['Promotores (9-10)',proms,JGR],['Pasivos (7-8)',pasivos,JOR],['Detractores (0-6)',detr,JRD]]
+              [['Promotores (5)',proms,JGR],['Pasivos (4)',pasivos,JOR],['Detractores (0-3)',detr,JRD]]
               .map(function(x){
                 var pct=total?Math.round(x[1]/total*100):0;
                 return h('div',{key:x[0]},
@@ -1861,7 +1863,7 @@ function App(){
                       return h('span',{key:ci,style:{fontSize:10,color:JMT,background:'#EDF1F5',
                         borderRadius:10,padding:'1px 8px'}},c);
                     }),
-                    h('span',{style:{fontSize:10,color:JMT,marginLeft:'auto'}},'NPS '+e.nps)),
+                    h('span',{style:{fontSize:10,color:JMT,marginLeft:'auto'}},'Recomendación: '+e.nps+'/5')),
                   h('div',{style:{fontSize:12,color:JTX,lineHeight:1.5}},e.comentario));
               }))));
   }
