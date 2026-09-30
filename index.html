@@ -184,6 +184,10 @@ var INP={width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid #DDE2E
 
 // ── Auth / Graph ──────────────────────────────────────────────────────────────
 var _driveId=null, _fileId=null;
+// Filas crudas de la hoja "Encuesta", tal como se leyeron la última vez.
+// writeSP las reescribe sin modificarlas en cada guardado — así la hoja
+// que el usuario pega manualmente desde Forms nunca se pierde.
+var _encuestaRaw=[];
 
 async function getToken(){
   var accounts=msalApp.getAllAccounts();
@@ -257,6 +261,30 @@ function parseComentarios(rows){
     };
   }).filter(function(c){return c.texto&&c.texto.trim()!=='';});
 }
+
+// Parsea la hoja "Encuesta" pegada tal cual desde el export de Microsoft Forms.
+// Encabezados exactos observados: '¿Desde qué país trabajas con nuestro equipo?',
+// 'Categorías que gestionas', 'Probabilidad recomendación',
+// '¿Cómo calificas la calidad de los reportes...', '...agilidad...', '...comunicación...'
+function parseEncuesta(rows){
+  return rows.map(function(r,i){
+    var keys=Object.keys(r);
+    function find(){for(var a=0;a<arguments.length;a++){var c=arguments[a];var k=keys.find(function(k){return k.toLowerCase().indexOf(c.toLowerCase())!==-1;});if(k!==undefined)return r[k];}return '';}
+    var catsRaw=String(find('categor')||'');
+    var cats=catsRaw.split(';').map(function(s){return s.trim();}).filter(Boolean);
+    return {
+      id:'enc'+i,
+      fecha:find('hora de inicio','hora de finalización','fecha')||'',
+      pais:String(find('país','pais')||'').trim(),
+      categorias:cats,
+      nps:Number(find('probabilidad recomendación','nps')||NaN),
+      calidad:Number(find('calidad de los reportes','calidad')||NaN),
+      agilidad:Number(find('agilidad')||NaN),
+      comunicacion:Number(find('comunicación','comunicacion')||NaN),
+      comentario:String(find('mejorar o mantener','comentario')||'').trim()
+    };
+  }).filter(function(e){return e.pais&&!isNaN(e.nps);});
+}
 async function readSP(){
   var driveId=await getDriveId(), fileId=await getFileId(), t=await getToken();
   var r=await fetch('https://graph.microsoft.com/v1.0/drives/'+driveId+'/items/'+fileId+'/content',{headers:{Authorization:'Bearer '+t}});
@@ -266,7 +294,15 @@ async function readSP(){
   var tareas=parseRows(XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:''}));
   var snC=wb.SheetNames.find(function(n){return n.toLowerCase().indexOf('comentario')!==-1;});
   var comentarios = snC ? parseComentarios(XLSX.utils.sheet_to_json(wb.Sheets[snC],{defval:''})) : [];
-  return {tareas:tareas, comentarios:comentarios};
+  // Hoja "Encuesta": la app solo LEE, nunca escribe contenido nuevo — el usuario
+  // la actualiza pegando manualmente el export de Forms. Guardamos las filas
+  // crudas (encuestaRaw) para volver a escribirlas tal cual en cada writeSP,
+  // así la hoja nunca desaparece aunque alguien guarde una tarea o comentario.
+  var snE=wb.SheetNames.find(function(n){return n.toLowerCase().indexOf('encuesta')!==-1;});
+  var encuestaRaw = snE ? XLSX.utils.sheet_to_json(wb.Sheets[snE],{defval:''}) : [];
+  _encuestaRaw = encuestaRaw; // cache para que writeSP la preserve
+  var encuesta = parseEncuesta(encuestaRaw);
+  return {tareas:tareas, comentarios:comentarios, encuestaRaw:encuestaRaw, encuesta:encuesta};
 }
 async function writeSP(data,comentariosArg){
   _driveId=null; _fileId=null;
@@ -284,6 +320,13 @@ async function writeSP(data,comentariosArg){
   var wsC = comRows.length ? XLSX.utils.json_to_sheet(comRows) : XLSX.utils.aoa_to_sheet([['ID Comentario','Tarea ID','Fecha','Usuario','Texto','Tipo']]);
   wsC['!cols']=[16,10,16,20,50,12].map(function(w){return {wch:w};});
   XLSX.utils.book_append_sheet(wb,wsC,'Comentarios');
+
+  // Hoja "Encuesta": se reescribe tal cual se leyó (o vacía si nunca existió).
+  // La app nunca genera ni modifica su contenido, solo evita que desaparezca.
+  if(_encuestaRaw.length){
+    var wsE=XLSX.utils.json_to_sheet(_encuestaRaw);
+    XLSX.utils.book_append_sheet(wb,wsE,'Encuesta');
+  }
 
   var out=XLSX.write(wb,{bookType:'xlsx',type:'array'});
   var blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
@@ -923,6 +966,7 @@ function App(){
   var [donutSel,setDonutSel]=useState(null);
   var [isAdmin,setIsAdmin]=useState(false);
   var [comentarios,setComentarios]=useState([]);
+  var [encuesta,setEncuesta]=useState([]);
   var [dragId,setDragId]=useState(null);
   var [dragOver,setDragOver]=useState(null);
   var [dragOverCard,setDragOverCard]=useState(null);
@@ -952,6 +996,7 @@ function App(){
         var sp=await readSP();
         setData(sp.tareas);
         setComentarios(sp.comentarios);
+        setEncuesta(sp.encuesta);
         setStatus('ready');
         showToast('✅ '+sp.tareas.length+' solicitudes cargadas');
       }catch(e){console.error(e);setError(e.message);setStatus('error');}
@@ -1062,7 +1107,7 @@ function App(){
     }catch(e){ showToast('❌ '+e.message,'err'); }
     finally{ setSaving(false); }
   }
-  async function reload(){setStatus('loading');try{var sp=await readSP();setData(sp.tareas);setComentarios(sp.comentarios);setStatus('ready');showToast('✅ '+sp.tareas.length+' actualizadas');}catch(e){showToast('❌ '+e.message,'err');setStatus('ready');}}
+  async function reload(){setStatus('loading');try{var sp=await readSP();setData(sp.tareas);setComentarios(sp.comentarios);setEncuesta(sp.encuesta);setStatus('ready');showToast('✅ '+sp.tareas.length+' actualizadas');}catch(e){showToast('❌ '+e.message,'err');setStatus('ready');}}
 
   var filtered=useMemo(function(){return data.filter(function(d){return (fp==='Todos'||d.pais===fp)&&(fc==='Todos'||d.champion.indexOf(fc)!==-1)&&(fpr==='Todos'||d.prioridad===fpr)&&(!fRango.desde||!fRango.hasta||(function(){var fv=pFecha(fCampo==='fecha'?d.fecha:d.fechaLimite);return fv&&fv>=fRango.desde&&fv<=fRango.hasta;})())&&(search===''||d.solicitud.toLowerCase().indexOf(search.toLowerCase())!==-1||d.categoria.toLowerCase().indexOf(search.toLowerCase())!==-1);});},[data,fp,fc,fpr,fRango,fCampo,search]);
 
@@ -1690,6 +1735,135 @@ function App(){
   }
 
   // ── Dashboard ───────────────────────────────────────────────────────────────
+  // ── Vista Encuesta NPS (solo admin) ──────────────────────────────────────────
+  function vistaEncuesta(){
+    var JBG='#F4F6F8',JCARD='#FFFFFF',JBR='#DDE2E8',JTX='#0A0E14',JMT='#66717F';
+    var JGR='#1E6B4F',JOR='#B8721A',JRD='#A81E2D',JBL='#1B4B7F';
+    var [fPais,setFPais]=useState('Todos');
+    var [fCat,setFCat]=useState('Todos');
+
+    function Card(p){
+      return h('div',{style:{background:JCARD,borderRadius:6,border:'1px solid '+JBR,
+        padding:p.pad||'18px 22px',boxShadow:'0 1px 3px rgba(0,0,0,.07)',
+        display:'flex',flexDirection:'column',gap:p.gap||12}},p.children);
+    }
+    function CT(t){
+      return h('div',{style:{fontSize:11,fontWeight:700,color:JMT,textTransform:'uppercase',
+        letterSpacing:'0.8px',paddingBottom:8,borderBottom:'1px solid '+JBR}},t);
+    }
+
+    var filtradas = encuesta.filter(function(e){
+      if(fPais!=='Todos'&&e.pais!==fPais) return false;
+      if(fCat!=='Todos'&&e.categorias.indexOf(fCat)===-1) return false;
+      return true;
+    });
+
+    if(!encuesta.length) return h('div',{style:{background:JCARD,border:'1px solid '+JBR,
+      borderRadius:6,padding:'60px 24px',textAlign:'center'}},
+      h('div',{style:{fontSize:36,marginBottom:10}},'📋'),
+      h('div',{style:{fontSize:14,color:JMT,marginBottom:6}},'Aún no hay respuestas de la encuesta cargadas.'),
+      h('div',{style:{fontSize:12,color:JMT}},'Pega la hoja "Encuesta" exportada desde Microsoft Forms en el Excel y sincroniza.'));
+
+    var total=filtradas.length;
+    var proms=filtradas.filter(function(e){return e.nps>=9;}).length;
+    var pasivos=filtradas.filter(function(e){return e.nps>=7&&e.nps<=8;}).length;
+    var detr=filtradas.filter(function(e){return e.nps<=6;}).length;
+    var npsScore = total ? Math.round((proms/total-detr/total)*100) : 0;
+    function avg(campo){
+      var vals=filtradas.map(function(e){return e[campo];}).filter(function(v){return !isNaN(v);});
+      return vals.length ? (vals.reduce(function(s,v){return s+v;},0)/vals.length) : 0;
+    }
+    var avgCalidad=avg('calidad'), avgAgilidad=avg('agilidad'), avgComunicacion=avg('comunicacion');
+
+    function Stars(v){
+      var full=Math.round(v);
+      return h('div',{style:{display:'flex',gap:2}},
+        [1,2,3,4,5].map(function(i){
+          return h('span',{key:i,style:{fontSize:16,color:i<=full?JOR:'#DDE2E8'}},'★');
+        }));
+    }
+
+    var paisesDisp=['Todos'].concat(PAISES);
+    var catsDisp=['Todos'].concat(CATEGORIAS);
+
+    var comentarios2=filtradas.filter(function(e){return e.comentario&&e.comentario.trim()!=='';})
+      .sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
+
+    return h('div',{style:{display:'flex',flexDirection:'column',gap:14,background:JBG,padding:'4px 0 24px'}},
+
+      // Filtros
+      h('div',{style:{display:'flex',gap:20,flexWrap:'wrap',background:JCARD,border:'1px solid '+JBR,
+        borderRadius:6,padding:'12px 16px'}},
+        h('div',null,
+          h('div',{style:{fontSize:10,fontWeight:700,color:JMT,marginBottom:5,textTransform:'uppercase'}},'País'),
+          h('div',{style:{display:'flex',gap:4}},
+            paisesDisp.map(function(p){
+              var act=fPais===p;
+              return h('button',{key:p,onClick:function(){setFPais(p);},
+                style:{padding:'4px 11px',borderRadius:20,border:'1px solid '+(act?JBL:JBR),
+                  background:act?JBL:'#fff',color:act?'#fff':JMT,fontSize:11,fontWeight:600,cursor:'pointer'}},p);
+            }))),
+        h('div',null,
+          h('div',{style:{fontSize:10,fontWeight:700,color:JMT,marginBottom:5,textTransform:'uppercase'}},'Categoría'),
+          h('div',{style:{display:'flex',gap:4,flexWrap:'wrap',maxWidth:600}},
+            catsDisp.map(function(c){
+              var act=fCat===c;
+              return h('button',{key:c,onClick:function(){setFCat(c);},
+                style:{padding:'4px 11px',borderRadius:20,border:'1px solid '+(act?JBL:JBR),
+                  background:act?JBL:'#fff',color:act?'#fff':JMT,fontSize:11,fontWeight:600,cursor:'pointer'}},c);
+            })))),
+
+      // NPS + estrellas
+      h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1.2fr',gap:14}},
+        h(Card,{gap:14},
+          CT('Net Promoter Score'),
+          h('div',{style:{display:'flex',alignItems:'center',gap:20}},
+            h('div',{style:{fontSize:52,fontWeight:800,
+              color:npsScore>=50?JGR:npsScore>=0?JOR:JRD}},npsScore),
+            h('div',{style:{flex:1,display:'flex',flexDirection:'column',gap:6}},
+              [['Promotores (9-10)',proms,JGR],['Pasivos (7-8)',pasivos,JOR],['Detractores (0-6)',detr,JRD]]
+              .map(function(x){
+                var pct=total?Math.round(x[1]/total*100):0;
+                return h('div',{key:x[0]},
+                  h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:11,marginBottom:2}},
+                    h('span',{style:{color:JMT}},x[0]),h('span',{style:{fontWeight:700,color:x[2]}},x[1]+' ('+pct+'%)')),
+                  h('div',{style:{height:5,background:'#EDF1F5',borderRadius:3}},
+                    h('div',{style:{width:pct+'%',height:'100%',background:x[2],borderRadius:3}})));
+              }))),
+          h('div',{style:{fontSize:11,color:JMT}},total+' respuesta'+(total===1?'':'s')+' en el filtro actual')),
+
+        h(Card,{gap:14},
+          CT('Calificación del servicio'),
+          [['Calidad de reportes y entregables',avgCalidad],
+           ['Agilidad y cumplimiento de tiempos',avgAgilidad],
+           ['Comunicación y disposición',avgComunicacion]].map(function(x){
+            return h('div',{key:x[0],style:{display:'flex',alignItems:'center',justifyContent:'space-between'}},
+              h('span',{style:{fontSize:12,color:JTX}},x[0]),
+              h('div',{style:{display:'flex',alignItems:'center',gap:8}},
+                Stars(x[1]),h('span',{style:{fontSize:12,fontWeight:700,color:JTX,minWidth:28}},x[1].toFixed(1))));
+          }))),
+
+      // Comentarios abiertos
+      h(Card,{gap:12},
+        CT('Comentarios — qué mejorar o mantener ('+comentarios2.length+')'),
+        comentarios2.length===0
+          ? h('div',{style:{fontSize:12,color:JMT,textAlign:'center',padding:'20px 0'}},'Sin comentarios en el filtro actual.')
+          : h('div',{style:{display:'flex',flexDirection:'column',gap:10,maxHeight:360,overflowY:'auto'}},
+              comentarios2.map(function(e,i){
+                return h('div',{key:i,style:{borderLeft:'3px solid '+JBL,background:JBG,
+                  borderRadius:'0 6px 6px 0',padding:'10px 14px'}},
+                  h('div',{style:{display:'flex',gap:8,alignItems:'center',marginBottom:5,flexWrap:'wrap'}},
+                    h('span',{style:{fontSize:10,fontWeight:700,color:JBL,background:'#E4ECF4',
+                      borderRadius:10,padding:'1px 8px'}},e.pais),
+                    e.categorias.map(function(c,ci){
+                      return h('span',{key:ci,style:{fontSize:10,color:JMT,background:'#EDF1F5',
+                        borderRadius:10,padding:'1px 8px'}},c);
+                    }),
+                    h('span',{style:{fontSize:10,color:JMT,marginLeft:'auto'}},'NPS '+e.nps)),
+                  h('div',{style:{fontSize:12,color:JTX,lineHeight:1.5}},e.comentario));
+              }))));
+  }
+
   function dashboard(){
     function splitHrs(field,hrs,name){
       var parts=field.split('/').map(function(s){return s.trim();}).filter(Boolean);
@@ -2356,6 +2530,7 @@ function App(){
         h('button',{style:sb('lista'),onClick:function(){setView('lista');}},'☰ Lista'),
         h('button',{style:sb('calendario'),onClick:function(){setView('calendario');}},'📅 Calendario'),
         isAdmin&&h('button',{style:sb('dashboard'),onClick:function(){setView('dashboard');}},'📊 Dashboard'),
+        isAdmin&&h('button',{style:sb('encuesta'),onClick:function(){setView('encuesta');}},'📋 Encuesta'),
         h('div',{style:{width:1,height:24,background:'rgba(255,255,255,.25)',margin:'0 4px'}}),
         h('button',{onClick:reload,style:{padding:'7px 14px',borderRadius:8,background:'rgba(255,255,255,.1)',color:'#fff',border:'1px solid rgba(255,255,255,.25)',cursor:'pointer',fontSize:12,fontWeight:600}},'🔄 Sincronizar'),
         isAdmin&&h('button',{onClick:function(){document.body.classList.remove('print-orden');window.print();},style:{padding:'7px 14px',borderRadius:8,background:'rgba(255,255,255,.1)',color:'#fff',border:'1px solid rgba(255,255,255,.25)',cursor:'pointer',fontSize:12,fontWeight:600}},'🖨 Exportar PDF'),
@@ -2399,7 +2574,8 @@ function App(){
       view==='mitrabajo'&&miTrabajo(),
       view==='lista'&&lista(),
       view==='calendario'&&calendario(),
-      view==='dashboard'&&(isAdmin?dashboard():h(SinAcceso,null))),
+      view==='dashboard'&&(isAdmin?dashboard():h(SinAcceso,null)),
+      view==='encuesta'&&(isAdmin?vistaEncuesta():h(SinAcceso,null))),
     // Modals
     sel&&h(EditModal,{item:sel,onClose:function(){setSel(null);},onSave:updateItem,comentarios:comentarios,onAddComment:addComment}),
     showNew&&h(NewModal,{onClose:function(){setShowNew(false);},onAdd:addItem,nextId:nextId}),
