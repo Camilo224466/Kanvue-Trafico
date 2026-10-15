@@ -292,6 +292,18 @@ async function readSP(){
   var buf=await r.arrayBuffer(), wb=XLSX.read(buf,{type:'array'});
   var sn=wb.SheetNames.find(function(n){return n.indexOf('Tráfico')!==-1||n.indexOf('General')!==-1||n.indexOf('trafico')!==-1;})||wb.SheetNames[0];
   var tareas=parseRows(XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:''}));
+  // Repara # repetidos: la primera fila conserva su número, las demás reciben uno nuevo.
+  (function(){var vistos={},mx=tareas.reduce(function(m,t){return Math.max(m,Number(t.id)||0);},0);
+    tareas.forEach(function(t){if(vistos[t.id]||!t.id){mx++;t.id=mx;}vistos[t.id]=1;});})();
+  // Repara el campo 'orden': por cada estado, si hay valores repetidos, vacíos o casi
+  // pegados (por dividir a la mitad muchas veces), se renumera 10,20,30… respetando
+  // el orden visual actual (orden y, en empate, # de tarea).
+  (function(){var g={};tareas.forEach(function(t){(g[t.estado]=g[t.estado]||[]).push(t);});
+    Object.keys(g).forEach(function(k){
+      var l=g[k].slice().sort(function(a,b){return (a.orden-b.orden)||(a.id-b.id);});
+      var mal=l.some(function(t,i){return isNaN(t.orden)||(i>0&&t.orden-l[i-1].orden<0.001);});
+      if(mal) l.forEach(function(t,i){t.orden=(i+1)*10;});
+    });})();
   var snC=wb.SheetNames.find(function(n){return n.toLowerCase().indexOf('comentario')!==-1;});
   var comentarios = snC ? parseComentarios(XLSX.utils.sheet_to_json(wb.Sheets[snC],{defval:''})) : [];
   // Hoja "NPS": la app solo LEE, nunca escribe contenido nuevo — el usuario
@@ -1132,6 +1144,10 @@ function App(){
     setSaving(true);
     try{
       var sp=await readSP();
+      // El # se asigna con lo que hay AHORA en SharePoint (no con la copia local,
+      // que puede estar desactualizada y repetir el número).
+      var maxId=sp.tareas.reduce(function(m,d){return Math.max(m,Number(d.id)||0);},0);
+      item=Object.assign({},item,{id:maxId+1});
       var nd=sp.tareas.concat([item]);
       setData(nd);
       setComentarios(sp.comentarios);
@@ -1703,7 +1719,7 @@ function App(){
 
       // Calcular nuevo orden: insertar antes de 'antesDeId' dentro de esa columna
       var colCards=filtered.filter(function(d){return d.estado===estado&&d.id!==dragId;})
-        .sort(function(a,b){return a.orden-b.orden;});
+        .sort(function(a,b){return (a.orden-b.orden)||(a.id-b.id);});
       var nuevoOrden;
       if(antesDeId==null){
         // soltado al final de la columna
@@ -1724,7 +1740,7 @@ function App(){
     return h('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}},
       ESTADOS.map(function(estado){
         var cards=filtered.filter(function(d){return d.estado===estado;})
-          .sort(function(a,b){return a.orden-b.orden;});
+          .sort(function(a,b){return (a.orden-b.orden)||(a.id-b.id);});
         var sm=SM[estado];
         var over=dragOver===estado;
         return h('div',{key:estado,
