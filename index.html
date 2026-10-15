@@ -294,11 +294,11 @@ async function readSP(){
   var tareas=parseRows(XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:''}));
   var snC=wb.SheetNames.find(function(n){return n.toLowerCase().indexOf('comentario')!==-1;});
   var comentarios = snC ? parseComentarios(XLSX.utils.sheet_to_json(wb.Sheets[snC],{defval:''})) : [];
-  // Hoja "Encuesta": la app solo LEE, nunca escribe contenido nuevo — el usuario
+  // Hoja "NPS": la app solo LEE, nunca escribe contenido nuevo — el usuario
   // la actualiza pegando manualmente el export de Forms. Guardamos las filas
   // crudas (encuestaRaw) para volver a escribirlas tal cual en cada writeSP,
   // así la hoja nunca desaparece aunque alguien guarde una tarea o comentario.
-  var snE=wb.SheetNames.find(function(n){return n.toLowerCase().indexOf('encuesta')!==-1;});
+  var snE=wb.SheetNames.find(function(n){var l=n.toLowerCase();return l==='nps'||l.indexOf('nps')===0||l.indexOf('encuesta')!==-1;});
   var encuestaRaw = snE ? XLSX.utils.sheet_to_json(wb.Sheets[snE],{defval:''}) : [];
   _encuestaRaw = encuestaRaw; // cache para que writeSP la preserve
   var encuesta = parseEncuesta(encuestaRaw);
@@ -321,11 +321,11 @@ async function writeSP(data,comentariosArg){
   wsC['!cols']=[16,10,16,20,50,12].map(function(w){return {wch:w};});
   XLSX.utils.book_append_sheet(wb,wsC,'Comentarios');
 
-  // Hoja "Encuesta": se reescribe tal cual se leyó (o vacía si nunca existió).
+  // Hoja "NPS": se reescribe tal cual se leyó (o vacía si nunca existió).
   // La app nunca genera ni modifica su contenido, solo evita que desaparezca.
   if(_encuestaRaw.length){
     var wsE=XLSX.utils.json_to_sheet(_encuestaRaw);
-    XLSX.utils.book_append_sheet(wb,wsE,'Encuesta');
+    XLSX.utils.book_append_sheet(wb,wsE,'NPS');
   }
 
   var out=XLSX.write(wb,{bookType:'xlsx',type:'array'});
@@ -1787,7 +1787,7 @@ function App(){
   }
 
   // ── Dashboard ───────────────────────────────────────────────────────────────
-  // ── Vista Encuesta NPS (solo admin) ──────────────────────────────────────────
+  // ── Vista NPS (solo admin) ──────────────────────────────────────────
   function vistaEncuesta(){
     var JBG='#F4F6F8',JCARD='#FFFFFF',JBR='#DDE2E8',JTX='#0A0E14',JMT='#66717F';
     var JGR='#1E6B4F',JOR='#B8721A',JRD='#A81E2D',JBL='#1B4B7F';
@@ -1813,15 +1813,14 @@ function App(){
     if(!encuesta.length) return h('div',{style:{background:JCARD,border:'1px solid '+JBR,
       borderRadius:6,padding:'60px 24px',textAlign:'center'}},
       h('div',{style:{fontSize:36,marginBottom:10}},'📋'),
-      h('div',{style:{fontSize:14,color:JMT,marginBottom:6}},'Aún no hay respuestas de la encuesta cargadas.'),
-      h('div',{style:{fontSize:12,color:JMT}},'Pega la hoja "Encuesta" exportada desde Microsoft Forms en el Excel y sincroniza.'));
+      h('div',{style:{fontSize:14,color:JMT,marginBottom:6}},'Aún no hay respuestas de NPS cargadas.'),
+      h('div',{style:{fontSize:12,color:JMT}},'Pega la hoja "NPS" exportada desde Microsoft Forms en el Excel y sincroniza.'));
 
     var total=filtradas.length;
-    // La pregunta de recomendación en el Forms real quedó en escala 0-5
-// (no la escala NPS estándar de 0-10). Promotor=5, Pasivo=4, Detractor=0-3.
-var proms=filtradas.filter(function(e){return e.nps>=5;}).length;
-    var pasivos=filtradas.filter(function(e){return e.nps===4;}).length;
-    var detr=filtradas.filter(function(e){return e.nps<=3;}).length;
+    // Escala NPS estándar 0-10: Promotor 9-10, Pasivo 7-8, Detractor 0-6.
+var proms=filtradas.filter(function(e){return e.nps>=9;}).length;
+    var pasivos=filtradas.filter(function(e){return e.nps>=7&&e.nps<=8;}).length;
+    var detr=filtradas.filter(function(e){return e.nps<=6;}).length;
     var npsScore = total ? Math.round((proms/total-detr/total)*100) : 0;
     function avg(campo){
       var vals=filtradas.map(function(e){return e[campo];}).filter(function(v){return !isNaN(v);});
@@ -1875,7 +1874,7 @@ var proms=filtradas.filter(function(e){return e.nps>=5;}).length;
             h('div',{style:{fontSize:52,fontWeight:800,
               color:npsScore>=50?JGR:npsScore>=0?JOR:JRD}},npsScore),
             h('div',{style:{flex:1,display:'flex',flexDirection:'column',gap:6}},
-              [['Promotores (5)',proms,JGR],['Pasivos (4)',pasivos,JOR],['Detractores (0-3)',detr,JRD]]
+              [['Promotores (9-10)',proms,JGR],['Pasivos (7-8)',pasivos,JOR],['Detractores (0-6)',detr,JRD]]
               .map(function(x){
                 var pct=total?Math.round(x[1]/total*100):0;
                 return h('div',{key:x[0]},
@@ -1913,7 +1912,7 @@ var proms=filtradas.filter(function(e){return e.nps>=5;}).length;
                       return h('span',{key:ci,style:{fontSize:10,color:JMT,background:'#EDF1F5',
                         borderRadius:10,padding:'1px 8px'}},c);
                     }),
-                    h('span',{style:{fontSize:10,color:JMT,marginLeft:'auto'}},'Recomendación: '+e.nps+'/5')),
+                    h('span',{style:{fontSize:10,color:JMT,marginLeft:'auto'}},'Recomendación: '+e.nps+'/10')),
                   h('div',{style:{fontSize:12,color:JTX,lineHeight:1.5}},e.comentario));
               }))));
   }
@@ -2650,7 +2649,7 @@ var proms=filtradas.filter(function(e){return e.nps>=5;}).length;
         h('button',{style:sb('lista'),onClick:function(){setView('lista');}},'☰ Lista'),
         h('button',{style:sb('calendario'),onClick:function(){setView('calendario');}},'📅 Calendario'),
         isAdmin&&h('button',{style:sb('dashboard'),onClick:function(){setView('dashboard');}},'📊 Dashboard'),
-        isAdmin&&h('button',{style:sb('encuesta'),onClick:function(){setView('encuesta');}},'📋 Encuesta'),
+        isAdmin&&h('button',{style:sb('encuesta'),onClick:function(){setView('encuesta');}},'📊 NPS'),
         h('div',{style:{width:1,height:24,background:'rgba(255,255,255,.25)',margin:'0 4px'}}),
         h('button',{onClick:reload,style:{padding:'7px 14px',borderRadius:8,background:'rgba(255,255,255,.1)',color:'#fff',border:'1px solid rgba(255,255,255,.25)',cursor:'pointer',fontSize:12,fontWeight:600}},'🔄 Sincronizar'),
         isAdmin&&h('button',{onClick:function(){document.body.classList.remove('print-orden');window.print();},style:{padding:'7px 14px',borderRadius:8,background:'rgba(255,255,255,.1)',color:'#fff',border:'1px solid rgba(255,255,255,.25)',cursor:'pointer',fontSize:12,fontWeight:600}},'🖨 Exportar PDF'),
