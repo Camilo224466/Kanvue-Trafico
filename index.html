@@ -511,6 +511,79 @@ textarea.inp{resize:vertical;line-height:1.5}
 @media (max-width:1280px){.dgrid-6{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:1000px){.dgrid-3,.dgrid-2,.dgrid-21{grid-template-columns:1fr}.dgrid-6{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
+/* ══ Diseño C: banda de marca superior + menú compacto de íconos ══════════ */
+.app{grid-template-columns:64px minmax(0,1fr);grid-template-rows:auto 1fr}
+.band{grid-column:1/-1;position:sticky;top:0;z-index:50;background:#1B4B7F;height:64px;display:flex;align-items:center;gap:14px;padding:0 20px 0 12px;color:#fff;box-shadow:0 1px 0 rgba(0,0,0,.08)}
+.band-logo{background:#fff;border-radius:8px;padding:6px 12px;display:flex;align-items:center;flex-shrink:0}
+.band-logo img{height:28px;display:block}
+.band-div{width:1px;height:30px;background:rgba(255,255,255,.25);flex-shrink:0}
+.band-title{min-width:0;display:flex;flex-direction:column}
+.band-sub{font-size:11.5px;color:#B9CAE0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.band-title h1{font-size:18px;font-weight:650;color:#fff;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25}
+.band-actions{margin-left:auto;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.band-saving{display:flex;align-items:center;gap:6px;font-size:12px;color:#DCE6F2}
+.band-saving .spinner{border-color:rgba(255,255,255,.25);border-top-color:#fff}
+.band-search{display:flex;align-items:center;gap:6px;height:34px;width:280px;padding:0 10px;border-radius:8px;background:rgba(255,255,255,.12);color:#DCE6F2;border:1px solid transparent;transition:all .15s}
+.band-search:hover{background:rgba(255,255,255,.18)}
+.band-search:focus-within{background:#fff;color:var(--g2);width:340px;border-color:#fff}
+.band-search input{flex:1;min-width:0;border:none;outline:none;background:none;color:#fff;font-size:13px}
+.band-search:focus-within input{color:var(--ink)}
+.band-search input::placeholder{color:rgba(255,255,255,.65)}
+.band-search:focus-within input::placeholder{color:var(--g3)}
+.band-search kbd{background:rgba(255,255,255,.15);border-color:transparent;color:#DCE6F2}
+.band-search:focus-within kbd{background:#fff;border-color:var(--g4);color:var(--g2)}
+.band-x{border:none;background:none;color:inherit;cursor:pointer;display:inline-flex;padding:2px;border-radius:4px}
+.band-create{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:8px;border:none;background:#fff;color:#1B4B7F;font-weight:650;font-size:13px;cursor:pointer}
+.band-create:hover{background:#E4ECF4}
+.band-user{display:flex;align-items:center;gap:8px;padding-left:10px;border-left:1px solid rgba(255,255,255,.2)}
+.band-user .avatar{border:2px solid rgba(255,255,255,.35)}
+.band-user-txt{display:flex;flex-direction:column;line-height:1.2}
+.band-user-txt b{font-size:12.5px;font-weight:600;color:#fff;white-space:nowrap}
+.band-user-txt span{font-size:11px;color:#B9CAE0}
+.band-btn{border:none;background:none;color:#fff;width:36px;height:36px;border-radius:8px;cursor:pointer;display:none;align-items:center;justify-content:center;flex-shrink:0}
+.band-btn:hover{background:rgba(255,255,255,.12)}
+
+.rail{position:sticky;top:64px;height:calc(100vh - 64px);background:#fff;border-right:1px solid var(--g4);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:4px;z-index:40}
+.rail-nav{display:flex;flex-direction:column;gap:4px;align-items:center}
+.rail-item{position:relative;width:42px;height:42px;border-radius:10px;border:none;background:none;color:var(--g2);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.rail-item:hover{background:var(--g5);color:var(--ink)}
+.rail-item.is-on{background:#E4ECF4;color:#1B4B7F}
+.rail-item.is-on::before{content:'';position:absolute;left:-11px;top:9px;bottom:9px;width:3px;border-radius:0 3px 3px 0;background:#1B4B7F}
+.rail-ico{display:inline-flex}
+.rail-label{position:absolute;left:54px;top:50%;transform:translateY(-50%) translateX(-4px);background:var(--ink);color:#fff;font-size:12.5px;font-weight:500;padding:6px 10px;border-radius:6px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s,transform .12s;display:flex;gap:10px;align-items:center;z-index:60;box-shadow:var(--sh2)}
+.rail-item:hover .rail-label,.rail-item:focus-visible .rail-label{opacity:1;transform:translateY(-50%)}
+.rail-label kbd{background:rgba(255,255,255,.14);border:none;color:#fff}
+.rail-lock{position:absolute;right:5px;bottom:5px;color:var(--g3);display:inline-flex}
+.rail-sep{width:28px;height:1px;background:var(--g4);margin:8px 0}
+.rail-foot{margin-top:auto}
+.main{min-height:calc(100vh - 64px)}
+.toolbar{padding-top:14px}
+
+@media (max-width:1000px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .band-btn{display:inline-flex}
+  .band{padding:0 12px 0 6px;gap:10px}
+  .band-sub,.band-user-txt,.band-div{display:none}
+  .band-user{border-left:none;padding-left:0}
+  .rail{position:fixed;left:0;top:64px;bottom:0;height:auto;width:230px;align-items:stretch;padding:12px 10px;transform:translateX(-100%);transition:transform .22s;box-shadow:var(--sh3)}
+  .app.nav-open .rail{transform:none}
+  .app.nav-open .scrim{display:block;position:fixed;inset:64px 0 0 0;background:rgba(16,24,40,.3);z-index:35}
+  .rail-nav{align-items:stretch}
+  .rail-item{width:100%;justify-content:flex-start;gap:12px;padding:0 12px}
+  .rail-item.is-on::before{display:none}
+  .rail-label{position:static;opacity:1;transform:none;background:none;color:inherit;box-shadow:none;padding:0;flex:1;justify-content:space-between}
+  .rail-label kbd{display:none}
+  .rail-sep{width:auto}
+  .rail-lock{position:static;order:3}
+}
+@media (max-width:640px){
+  .band-search{display:none}
+  .band-logo{padding:4px 8px}
+  .band-logo img{height:22px}
+  .band-title h1{font-size:15px}
+  .band-user{display:none}
+}
+
 #rep{display:none}
 #orden{display:none}
 
@@ -4118,41 +4191,45 @@ function App(){
       }));
   }
 
-  var sidebar=h('div',{className:'sidebar'},
-    h('div',{className:'sb-brand'},h('img',{src:'data:image/png;base64,'+LOGO_B64,alt:'RetailATAM'})),
-    h('div',{className:'sb-project'},
-      h('span',{className:'sb-proj-ico'},'K'),
-      h('div',null,h('div',{className:'sb-proj-name'},'Kenvue · Tráfico'),h('div',{className:'sb-proj-sub'},'Category Management · CO & MX'))),
-    h('nav',{className:'sb-nav'},
+  // ── Menú lateral compacto (solo íconos; el nombre aparece al pasar el mouse) ─
+  function RailItem(p){
+    return h('button',{className:'rail-item'+(p.on?' is-on':''),onClick:p.onClick,'aria-label':p.label},
+      h('span',{className:'rail-ico'},h(Ico,{n:p.icon,s:19})),
+      h('span',{className:'rail-label'},p.label,p.kbd&&h('kbd',null,p.kbd)),
+      p.lock&&h('span',{className:'rail-lock'},h(Ico,{n:'lock',s:10})));
+  }
+  var sidebar=h('div',{className:'rail'},
+    h('nav',{className:'rail-nav'},
       VISTAS.map(function(v,i){
-        return h('button',{key:v.k,className:'sb-item'+(view===v.k?' is-on':''),onClick:function(){irA(v.k);},title:v.l+' · atajo '+(i+1)},
-          h('span',{className:'sb-ico'},h(Ico,{n:v.i})),h('span',{className:'sb-label'},v.s||v.l),
-          v.admin&&h('span',{className:'sb-lock',title:'Solo administradores'},h(Ico,{n:'lock',s:12})),
-          h('kbd',null,i+1));
+        return h(RailItem,{key:v.k,on:view===v.k,icon:v.i,label:v.s||v.l,kbd:String(i+1),lock:v.admin,onClick:function(){irA(v.k);}});
       })),
-    isAdmin&&h('div',{className:'sb-section'},'Documentos'),
-    isAdmin&&h('div',{className:'sb-nav'},
-      h('button',{className:'sb-item',onClick:function(){setNavAbierta(false);document.body.classList.remove('print-orden');window.print();}},h('span',{className:'sb-ico'},h(Ico,{n:'file'})),h('span',{className:'sb-label'},'Reporte PDF')),
-      h('button',{className:'sb-item',onClick:function(){setNavAbierta(false);setShowOrden(true);}},h('span',{className:'sb-ico'},h(Ico,{n:'edit'})),h('span',{className:'sb-label'},'Orden de trabajo'))),
-    h('div',{className:'sb-foot'},
-      h('button',{className:'sb-item',onClick:function(){setShowAyuda(true);}},h('span',{className:'sb-ico'},h(Ico,{n:'keyboard'})),h('span',{className:'sb-label'},'Atajos de teclado'),h('kbd',null,'?')),
-      user&&h('div',{className:'sb-user'},h(Avatar,{name:user.name||user.username||''}),
-        h('div',{className:'sb-user-txt'},h('div',{className:'sb-user-name'},user.name||user.username),h('div',{className:'sb-user-role'},DEMO?'Modo demo':isAdmin?'Administrador':'Colaborador')))));
+    isAdmin&&h('div',{className:'rail-sep'}),
+    isAdmin&&h('nav',{className:'rail-nav'},
+      h(RailItem,{icon:'file',label:'Reporte PDF',onClick:function(){setNavAbierta(false);document.body.classList.remove('print-orden');window.print();}}),
+      h(RailItem,{icon:'edit',label:'Orden de trabajo',onClick:function(){setNavAbierta(false);setShowOrden(true);}})),
+    h('div',{className:'rail-foot'},
+      h(RailItem,{icon:'keyboard',label:'Atajos de teclado',kbd:'?',onClick:function(){setShowAyuda(true);}})));
 
-  var topbar=h('div',{className:'topbar'},
-    h('button',{className:'icon-btn hamb',onClick:function(){setNavAbierta(!navAbierta);},title:'Menú'},h(Ico,{n:'menu'})),
-    h('div',{className:'tb-title'},
-      h('h1',null,vistaAct.l),
-      h('div',{className:'crumbs'},h('span',null,'Kenvue Tráfico'))),
-    h('div',{className:'tb-actions'},
-      saving&&h('span',{className:'saving'},h('span',{className:'spinner spinner-xs'}),'Guardando…'),
-      h('div',{className:'search'},
-        h('span',{className:'search-ico'},h(Ico,{n:'search',s:15})),
+  // ── Banda de marca superior ────────────────────────────────────────────────
+  var topbar=h('div',{className:'band'},
+    h('button',{className:'band-btn hamb',onClick:function(){setNavAbierta(!navAbierta);},'aria-label':'Menú'},h(Ico,{n:'menu',s:18})),
+    h('div',{className:'band-logo'},h('img',{src:'data:image/png;base64,'+LOGO_B64,alt:'RETAILATAM'})),
+    h('span',{className:'band-div'}),
+    h('div',{className:'band-title'},
+      h('div',{className:'band-sub'},'Kenvue · Category Management · Colombia y México'),
+      h('h1',null,vistaAct.l)),
+    h('div',{className:'band-actions'},
+      saving&&h('span',{className:'band-saving'},h('span',{className:'spinner spinner-xs'}),'Guardando…'),
+      h('div',{className:'band-search'},
+        h(Ico,{n:'search',s:15}),
         h('input',{ref:searchRef,value:search,onChange:function(e){setSearch(e.target.value);},placeholder:'Buscar tareas, KT-12, champion…',
           onKeyDown:function(e){if(e.key==='Escape'){setSearch('');e.target.blur();}}}),
         !search&&h('kbd',null,'/'),
-        search&&h('button',{className:'icon-btn',style:{width:22,height:22},onClick:function(){setSearch('');}},h(Ico,{n:'x',s:14}))),
-      h('button',{className:'btn btn-primary',onClick:function(){setShowNew(true);},title:'Atajo: C'},h(Ico,{n:'plus',s:15}),h('span',{className:'btn-label'},'Crear'))));
+        search&&h('button',{className:'band-x',onClick:function(){setSearch('');},'aria-label':'Borrar búsqueda'},h(Ico,{n:'x',s:14}))),
+      h('button',{className:'band-create',onClick:function(){setShowNew(true);},title:'Atajo: C'},h(Ico,{n:'plus',s:16}),h('span',{className:'btn-label'},'Crear')),
+      user&&h('div',{className:'band-user',title:(user.name||user.username)+' · '+(DEMO?'Modo demo':isAdmin?'Administrador':'Colaborador')},
+        h(Avatar,{name:user.name||user.username||''}),
+        h('div',{className:'band-user-txt'},h('b',null,(user.name||user.username||'').split(' ').slice(0,2).join(' ')),h('span',null,DEMO?'Modo demo':isAdmin?'Administrador':'Colaborador')))));
 
   // Filtros avanzados en un panel desplegable; los rápidos quedan a la vista
   var nAvanz=(fp!=='Todos'?1:0)+(fc!=='Todos'?1:0)+(fpr!=='Todos'?1:0)+((fRango.desde&&fRango.hasta)?1:0);
@@ -4224,11 +4301,11 @@ function App(){
       h('div',{className:'muted small',style:{marginTop:12}},'Tip: copia el enlace de una tarea y compártelo; abre directo esa tarea.')));
 
   return h('div',{className:'app'+(navAbierta?' nav-open':''),onMouseDown:function(){if(ctx)setCtx(null);if(filtrosAbiertos)setFiltrosAbiertos(false);}},
+    topbar,
     sidebar,
     h('div',{className:'scrim',onClick:function(){setNavAbierta(false);}}),
     h('div',{className:'main'},
       DEMO&&h('div',{className:'banner banner-demo'},'Modo demo · datos de ejemplo · nada se guarda en SharePoint'),
-      topbar,
       toolbar,
       pillsEl,
       stats,
