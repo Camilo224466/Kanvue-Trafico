@@ -1654,9 +1654,15 @@ function App(){
     return function(){window.removeEventListener('hashchange',onHash);};
   });
   useEffect(function(){
+    // Solo tocar la dirección cuando la app ya cargó y únicamente si el # es
+    // nuestro (#KT-12). Tras el login, Microsoft devuelve la sesión en el #
+    // (#code=…): si se borra antes de que MSAL la lea, el login entra en bucle.
+    if(status!=='ready') return;
+    var esNuestro=new RegExp('^#'+KEY_PREFIX+'-\\d+$','i').test(location.hash);
+    if(location.hash&&!esNuestro) return;
     var objetivo=sel?'#'+claveTarea(sel.id):'';
     if(location.hash!==objetivo) history.replaceState(null,'',location.pathname+location.search+objetivo);
-  },[sel]);
+  },[sel,status]);
 
   // ── Atajos de teclado ───────────────────────────────────────────────────────
   useEffect(function(){
