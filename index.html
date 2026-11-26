@@ -995,13 +995,21 @@ async function readSP(){
   var driveId=await getDriveId(), fileId=await getFileId(), t=await getToken();
   // 1) huella de versión ANTES de bajar el contenido (si cambia entremedio,
   //    el guardado fallará con 412 y se reintentará: nunca se pisa nada).
-  var meta=await gGet('/drives/'+driveId+'/items/'+fileId+'?$select=id,eTag');
-  _eTag = meta && meta.eTag || null;
-  var r=await fetch('https://graph.microsoft.com/v1.0/drives/'+driveId+'/items/'+fileId+'/content',{headers:{Authorization:'Bearer '+t}});
-  if(!r.ok)throw new Error('Error descargando archivo: '+r.status);
+  var meta=await gGet('/drives/'+driveId+'/items/'+fileId+'?$select=id,eTag,size');
+  var eTag = meta && meta.eTag || null;
+  var r=await fetch('https://graph.microsoft.com/v1.0/drives/'+driveId+'/items/'+fileId+'/content',{headers:{Authorization:'Bearer '+t},cache:'no-store'});
+  if(!r.ok){ var eh=new Error('Error descargando archivo: '+r.status); if(r.status===423||r.status===409||r.status>=500) eh.reintentar=true; throw eh; }
   var buf=await r.arrayBuffer();
-  var wb=XLSX.read(buf,{type:'array',cellNF:true,cellStyles:true});
-  return procesarLibro(wb);
+  // Si otra persona estaba subiendo el archivo justo en ese momento, la descarga
+  // puede llegar incompleta o de otra versión: se marca para reintentar.
+  if(meta&&meta.size&&buf.byteLength!==meta.size){ var es=new Error('El archivo cambió mientras se leía'); es.reintentar=true; throw es; }
+  var wb;
+  try{ wb=XLSX.read(buf,{type:'array',cellNF:true,cellStyles:true}); }
+  catch(ex){ var ep=new Error('El archivo estaba guardándose desde otro equipo ('+ex.message+')'); ep.reintentar=true; throw ep; }
+  _eTag=eTag;
+  var res=procesarLibro(wb);
+  res._ctx={wb:wb,eTag:eTag};
+  return res;
 }
 function procesarLibro(wb){
   _wb=wb;
@@ -1081,8 +1089,11 @@ function escribirLibro(wb){
 
 function ErrorConflicto(){ var e=new Error('Otra persona guardó al mismo tiempo'); e.conflicto=true; return e; }
 
-async function writeSP(data,comentarios){
-  var wb=_wb||XLSX.utils.book_new();
+async function writeSP(data,comentarios,ctx){
+  // ctx = el libro y la versión (eTag) que se leyeron para ESTE guardado, para que
+  // una recarga u otro guardado en paralelo no mezcle versiones.
+  var wb=(ctx&&ctx.wb)||_wb||XLSX.utils.book_new();
+  var eTagBase=ctx?ctx.eTag:_eTag;
   var ws=XLSX.utils.json_to_sheet(data.map(filaTarea));
   ws['!cols']=[4,10,12,10,18,45,12,18,10,10,12,12,10,30,8,10,30,14,30,12,10,30].map(function(w){return {wch:w};});
   ponerHoja(wb,_sheetTareas||'Tráfico General',ws);
@@ -1097,12 +1108,13 @@ async function writeSP(data,comentarios){
   if(!t) throw new Error('No se pudo obtener token');
   var out=escribirLibro(wb);
   var headers={Authorization:'Bearer '+t,'Content-Type':'application/octet-stream'};
-  if(_eTag) headers['If-Match']=_eTag;
+  if(eTagBase) headers['If-Match']=eTagBase;
   var up=await fetch('https://graph.microsoft.com/v1.0/drives/'+driveId+'/items/'+fileId+'/content',{method:'PUT',headers:headers,body:new Blob([out])});
-  if(up.status===412) throw ErrorConflicto();
-  if(up.status===423) throw new Error('El Excel está bloqueado (alguien lo tiene abierto en modo edición de escritorio). Intenta en un momento.');
+  if(up.status===412||up.status===409) throw ErrorConflicto();
+  if(up.status===423){ var el=new Error('El Excel está bloqueado (alguien lo tiene abierto en modo edición de escritorio). Intenta en un momento.'); el.reintentar=true; throw el; }
+  if(up.status===429||up.status>=500){ var er=new Error('SharePoint ocupado ('+up.status+')'); er.reintentar=true; throw er; }
   if(!up.ok)throw new Error('Error guardando en SharePoint: '+up.status+' '+await up.text());
-  try{ var j=await up.json(); if(j&&j.eTag) _eTag=j.eTag; }catch(e){}
+  try{ var j=await up.json(); if(j&&j.eTag){ _eTag=j.eTag; if(ctx) ctx.eTag=j.eTag; } }catch(e){}
 }
 
 // ── Datos de ejemplo (solo ?demo) ─────────────────────────────────────────────
@@ -2301,29 +2313,46 @@ function App(){
   // transformar(sp) recibe lo fresco de SharePoint y devuelve {tareas,comentarios}.
   // Antes de ir a SharePoint se aplica sobre lo local para que la pantalla
   // responda al instante (el arrastre en el tablero no "salta").
-  async function guardar(transformar,msgOk){
+  // Los guardados de este navegador van en fila (uno detrás de otro) y cada uno
+  // lee → combina → escribe con su propia versión del archivo. Si otra persona
+  // guardó entremedio (412) o el archivo se estaba subiendo, se espera y se reintenta.
+  var colaRef=React.useRef(Promise.resolve()), pendRef=React.useRef(0);
+  function guardar(transformar,msgOk){
     try{ var local=transformar({tareas:data,comentarios:comentarios}); setData(local.tareas); setComentarios(local.comentarios); }catch(e){}
-    setSaving(true);
+    pendRef.current++; setSaving(true);
+    var p=colaRef.current.then(function(){ return guardarAhora(transformar,msgOk); });
+    colaRef.current=p.catch(function(){});
+    return p.finally(function(){ pendRef.current--; if(pendRef.current<=0){ pendRef.current=0; setSaving(false); } });
+  }
+  async function guardarAhora(transformar,msgOk){
+    var MAX=6, combinado=false;
     try{
       for(var intento=0;;intento++){
-        var sp=await readSP();
-        var res=transformar(sp);
         try{
-          await writeSP(res.tareas,res.comentarios);
+          var sp=await readSP();
+          var res=transformar(sp);
+          await writeSP(res.tareas,res.comentarios,sp._ctx);
           setData(res.tareas); setComentarios(res.comentarios); setEncuesta(sp.encuesta);
-          if(intento>0) showToast('🔀 Alguien guardó al mismo tiempo: se combinaron ambos cambios');
+          if(combinado) showToast('🔀 Alguien guardó al mismo tiempo: se combinaron ambos cambios');
           else showToast(msgOk||'✅ Guardado');
           return true;
         }catch(e){
-          if(e.conflicto&&intento<3){ await new Promise(function(r){setTimeout(r,400+Math.random()*600);}); continue; }
+          var reint = e.conflicto || e.reintentar || e instanceof RangeError;
+          if(reint && intento<MAX){
+            if(e.conflicto) combinado=true;
+            var espera=Math.min(6000,500*Math.pow(2,intento))+Math.random()*700;
+            await new Promise(function(r){setTimeout(r,espera);});
+            continue;
+          }
           throw e;
         }
       }
     }catch(e){
-      showToast('❌ '+e.message,'err');
+      console.error('Error guardando',e);
+      showToast('❌ '+(e.conflicto||e.reintentar||e instanceof RangeError?'Varias personas están guardando a la vez y no se pudo completar tu cambio. Vuelve a intentarlo en unos segundos.':e.message),'err');
       try{var sp2=await readSP();setData(sp2.tareas);setComentarios(sp2.comentarios);}catch(e2){}
       return false;
-    }finally{ setSaving(false); }
+    }
   }
 
   // Varias tareas a la vez: pares [editado, antes]
