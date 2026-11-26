@@ -1042,6 +1042,43 @@ function ponerHoja(wb,nombre,ws){
   else XLSX.utils.book_append_sheet(wb,ws,nombre);
 }
 
+// Copia "limpia" de una hoja: solo celdas con valor (sin estilos ni filas/columnas
+// fantasma) y con el rango recalculado a lo que realmente tiene datos.
+function hojaLimpia(ws){
+  var o={}, mr=-1, mc=-1;
+  Object.keys(ws||{}).forEach(function(k){
+    if(k.charAt(0)==='!') return;
+    var c=ws[k]; if(!c||(c.v==null&&!c.f)) return;
+    var a; try{ a=XLSX.utils.decode_cell(k); }catch(e){ return; }
+    if(!(a.r>=0&&a.c>=0)) return;
+    var n={t:c.t||'s',v:c.v}; if(c.f) n.f=c.f; if(c.z&&typeof c.z==='string') n.z=c.z;
+    if(n.t==='d'&&!(n.v instanceof Date)) n.t='s';
+    o[k]=n; if(a.r>mr) mr=a.r; if(a.c>mc) mc=a.c;
+  });
+  o['!ref']=mr<0?'A1':XLSX.utils.encode_range({s:{r:0,c:0},e:{r:mr,c:mc}});
+  if(ws&&Array.isArray(ws['!cols'])){ var cols=[]; for(var i=0;i<=mc&&i<ws['!cols'].length;i++){ var w=ws['!cols'][i]; if(w&&isFinite(w.wch)) cols[i]={wch:w.wch}; } o['!cols']=cols; }
+  return o;
+}
+function escribirLibro(wb){
+  try{ return XLSX.write(wb,{bookType:'xlsx',type:'array'}); }
+  catch(e1){
+    console.warn('Escritura normal falló, se reintenta con hojas limpias:',e1);
+    // Arma un libro nuevo con las mismas hojas y en el mismo orden, copiando
+    // solo valores y fórmulas (sin estilos, propiedades ni metadatos del archivo).
+    var nb=XLSX.utils.book_new();
+    wb.SheetNames.forEach(function(n){ XLSX.utils.book_append_sheet(nb, hojaLimpia(wb.Sheets[n]), n); });
+    try{ return XLSX.write(nb,{bookType:'xlsx',type:'array'}); }
+    catch(e2){
+      var malas=wb.SheetNames.filter(function(n){
+        try{ var t=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(t,nb.Sheets[n],'x'); XLSX.write(t,{bookType:'xlsx',type:'array'}); return false; }
+        catch(e){ return true; }
+      });
+      console.error('No se pudo escribir el Excel',e2,malas);
+      throw new Error('No se pudo armar el Excel ('+e2.message+')'+(malas.length?' · hoja con problema: '+malas.join(', '):''));
+    }
+  }
+}
+
 function ErrorConflicto(){ var e=new Error('Otra persona guardó al mismo tiempo'); e.conflicto=true; return e; }
 
 async function writeSP(data,comentarios){
@@ -1058,7 +1095,7 @@ async function writeSP(data,comentarios){
 
   var driveId=await getDriveId(), fileId=await getFileId(), t=await getToken();
   if(!t) throw new Error('No se pudo obtener token');
-  var out=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+  var out=escribirLibro(wb);
   var headers={Authorization:'Bearer '+t,'Content-Type':'application/octet-stream'};
   if(_eTag) headers['If-Match']=_eTag;
   var up=await fetch('https://graph.microsoft.com/v1.0/drives/'+driveId+'/items/'+fileId+'/content',{method:'PUT',headers:headers,body:new Blob([out])});
@@ -1070,7 +1107,7 @@ async function writeSP(data,comentarios){
 
 // ── Datos de ejemplo (solo ?demo) ─────────────────────────────────────────────
 var _demoBuf=null;
-function demoGuardar(wb){ _demoBuf=XLSX.write(wb,{bookType:'xlsx',type:'array'}); }
+function demoGuardar(wb){ _demoBuf=escribirLibro(wb); }
 function demoLeer(){
   if(!_demoBuf) demoGuardar(demoLibro());
   return procesarLibro(XLSX.read(_demoBuf,{type:'array'}));
