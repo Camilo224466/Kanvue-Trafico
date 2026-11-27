@@ -1013,6 +1013,7 @@ async function readSP(){
 }
 function procesarLibro(wb){
   _wb=wb;
+  if(wb.Themes) delete wb.Themes;   // ver escribirLibro: libera memoria y evita reescribirlo
   wb.SheetNames.forEach(function(n){ recortarRango(wb.Sheets[n]); });
   var sn=wb.SheetNames.find(function(n){return n.indexOf('Tráfico')!==-1||n.indexOf('General')!==-1||n.toLowerCase().indexOf('trafico')!==-1;})||wb.SheetNames[0];
   _sheetTareas=sn;
@@ -1090,6 +1091,10 @@ function hojaLimpia(ws){
   return o;
 }
 function escribirLibro(wb){
+  // El tema (colores/fuentes de Office) NO se reescribe: la librería lo vuelve a
+  // codificar mal en cada guardado y el archivo crecía al doble cada vez (llegó a
+  // 75 MB y tumbaba el navegador). Sin él se escribe el tema estándar (~7 KB).
+  if(wb.Themes) delete wb.Themes;
   wb.SheetNames.forEach(function(n){ recortarRango(wb.Sheets[n]); });
   try{ return XLSX.write(wb,{bookType:'xlsx',type:'array'}); }
   catch(e1){
