@@ -1013,6 +1013,7 @@ async function readSP(){
 }
 function procesarLibro(wb){
   _wb=wb;
+  wb.SheetNames.forEach(function(n){ recortarRango(wb.Sheets[n]); });
   var sn=wb.SheetNames.find(function(n){return n.indexOf('Tráfico')!==-1||n.indexOf('General')!==-1||n.toLowerCase().indexOf('trafico')!==-1;})||wb.SheetNames[0];
   _sheetTareas=sn;
   var tareas=parseRows(XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:''}));
@@ -1050,6 +1051,27 @@ function ponerHoja(wb,nombre,ws){
   else XLSX.utils.book_append_sheet(wb,ws,nombre);
 }
 
+// Ajusta el rango declarado de una hoja (!ref) a las celdas que realmente tienen
+// contenido. Si una hoja dice ocupar "todo Excel" (p. ej. A1:XFD1048576 por
+// formato aplicado a columnas completas), la librería recorre millones de
+// celdas al guardar y el navegador se queda sin memoria. Conserva estilos.
+function recortarRango(ws){
+  if(!ws) return;
+  var mr=-1, mc=-1;
+  for(var k in ws){
+    if(k.charAt(0)==='!') continue;
+    var c=ws[k]; if(!c||(c.v==null&&!c.f)) { delete ws[k]; continue; }
+    var a; try{ a=XLSX.utils.decode_cell(k); }catch(e){ continue; }
+    if(a.r>mr) mr=a.r; if(a.c>mc) mc=a.c;
+  }
+  ws['!ref']=mr<0?'A1':XLSX.utils.encode_range({s:{r:0,c:0},e:{r:mr,c:mc}});
+  if(Array.isArray(ws['!rows'])&&ws['!rows'].length>mr+1) ws['!rows']=ws['!rows'].slice(0,mr+1);
+  if(Array.isArray(ws['!cols'])&&ws['!cols'].length>mc+1) ws['!cols']=ws['!cols'].slice(0,mc+1);
+  if(Array.isArray(ws['!merges'])) ws['!merges']=ws['!merges'].filter(function(m){return m.s.r<=mr&&m.s.c<=mc;}).map(function(m){
+    return {s:m.s,e:{r:Math.min(m.e.r,Math.max(mr,m.s.r)),c:Math.min(m.e.c,Math.max(mc,m.s.c))}};});
+  if(ws['!autofilter']) delete ws['!autofilter'];
+}
+
 // Copia "limpia" de una hoja: solo celdas con valor (sin estilos ni filas/columnas
 // fantasma) y con el rango recalculado a lo que realmente tiene datos.
 function hojaLimpia(ws){
@@ -1068,6 +1090,7 @@ function hojaLimpia(ws){
   return o;
 }
 function escribirLibro(wb){
+  wb.SheetNames.forEach(function(n){ recortarRango(wb.Sheets[n]); });
   try{ return XLSX.write(wb,{bookType:'xlsx',type:'array'}); }
   catch(e1){
     console.warn('Escritura normal falló, se reintenta con hojas limpias:',e1);
